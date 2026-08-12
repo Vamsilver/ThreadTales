@@ -1,0 +1,25 @@
+# Unreal Engine temp and build directories
+Binaries/*
+DerivedDataCache/*
+Intermediate/*
+Saved/*
+Build/*
+
+# Visual Studio files
+.vs/
+*.sln
+*.suo
+*.opensdf
+*.sdf
+*.VC.db
+*.VC.opendb
+
+# IDE configs (Rider / VS Code)
+.idea/
+.vscode/
+
+# Package builds
+/Builds/
+
+# Local configuration files
+Windows/
