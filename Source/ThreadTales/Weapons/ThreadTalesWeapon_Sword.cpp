@@ -1,6 +1,7 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "ThreadTalesWeapon_Sword.h"
+#include "Abilities/ThreadTalesGA_Melee.h"
 #include "Components/BoxComponent.h"
 #include "AbilitySystemComponent.h"
 #include "GameFramework/Character.h"

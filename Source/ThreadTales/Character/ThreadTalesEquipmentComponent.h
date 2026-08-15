@@ -51,6 +51,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "ThreadTales|Combat")
 	void PerformPrimaryAttack();
 
+	/** Called when the attack button is released (e.g. to release slingshot charge) */
+	UFUNCTION(BlueprintCallable, Category = "ThreadTales|Combat")
+	void ReleasePrimaryAttack();
+
 	/** Returns true if character currently has a weapon drawn and ready for combat */
 	UFUNCTION(BlueprintPure, Category = "ThreadTales|Combat")
 	bool IsInCombatStance() const;

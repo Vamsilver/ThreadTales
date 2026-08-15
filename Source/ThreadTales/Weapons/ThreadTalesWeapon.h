@@ -93,11 +93,19 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	UStaticMeshComponent* SheathMesh;
 
+	/** Whether this weapon uses a scabbard/sheath mesh and socket */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ThreadTales|Weapon")
+	bool bHasSheath = true;
+
+	/** Whether this weapon starts directly drawn in hand upon equipping */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ThreadTales|Weapon")
+	bool bStartDrawn = false;
+
 	/** Socket name on character skeleton where weapon is held in hand */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ThreadTales|Sockets")
 	FName HandSocketName;
 
-	/** Socket name on character skeleton where scabbard/sheath is attached */
+	/** Socket name on character skeleton where scabbard/sheath is attached (can be None if no sheath) */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ThreadTales|Sockets")
 	FName SheathSocketName;
 

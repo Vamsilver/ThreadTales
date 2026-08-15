@@ -4,6 +4,7 @@
 #include "ThreadTales.h"
 #include "ThreadTalesWeapon.h"
 #include "ThreadTalesGA_Melee.h"
+#include "ThreadTalesGA_RangedAttack.h"
 #include "AbilitySystemInterface.h"
 #include "AbilitySystemComponent.h"
 #include "Net/UnrealNetwork.h"
@@ -240,10 +241,71 @@ void UThreadTalesEquipmentComponent::PerformPrimaryAttack()
 			}
 		}
 
-		// Otherwise, start the melee attack combo ability
-		FGameplayTag MeleeTag = FGameplayTag::RequestGameplayTag(FName("Ability.Melee"));
-		bool bActivated = ASC->TryActivateAbilitiesByTag(FGameplayTagContainer(MeleeTag));
-		UE_LOG(LogThreadTalesCombat, Log, TEXT("[Equipment] TryActivateAbilitiesByTag(Ability.Melee): %s"), bActivated ? TEXT("SUCCESS") : TEXT("FAILED (Ability not granted to ASC or blocked?)"));
+		// Otherwise, trigger the appropriate attack ability (Melee or Ranged)
+		FGameplayTag MeleeTag = FGameplayTag::RequestGameplayTag(FName("Ability.Melee"), false);
+		FGameplayTag RangedTag = FGameplayTag::RequestGameplayTag(FName("Ability.Ranged"), false);
+		FGameplayTag SlingshotTag = FGameplayTag::RequestGameplayTag(FName("Ability.Ranged.Slingshot"), false);
+
+		FGameplayTagContainer AttackTags;
+		if (MeleeTag.IsValid()) AttackTags.AddTag(MeleeTag);
+		if (RangedTag.IsValid()) AttackTags.AddTag(RangedTag);
+		if (SlingshotTag.IsValid()) AttackTags.AddTag(SlingshotTag);
+
+		UE_LOG(LogThreadTalesCombat, Display, TEXT("[Equipment] PerformPrimaryAttack trying tags: %s | ASC abilities count: %d"), *AttackTags.ToStringSimple(), ASC->GetActivatableAbilities().Num());
+		for (const FGameplayAbilitySpec& Spec : ASC->GetActivatableAbilities())
+		{
+			FString AbilityName = Spec.Ability ? Spec.Ability->GetName() : TEXT("NULL");
+			FString TagsStr = Spec.Ability ? Spec.Ability->GetAssetTags().ToStringSimple() : TEXT("None");
+			UE_LOG(LogThreadTalesCombat, Display, TEXT("   -> Ability: %s | Tags: %s | Active: %s"), *AbilityName, *TagsStr, Spec.IsActive() ? TEXT("YES") : TEXT("NO"));
+		}
+
+		bool bActivated = false;
+		if (MeleeTag.IsValid() && ASC->TryActivateAbilitiesByTag(FGameplayTagContainer(MeleeTag)))
+		{
+			bActivated = true;
+		}
+		else if (SlingshotTag.IsValid() && ASC->TryActivateAbilitiesByTag(FGameplayTagContainer(SlingshotTag)))
+		{
+			bActivated = true;
+		}
+		else if (RangedTag.IsValid() && ASC->TryActivateAbilitiesByTag(FGameplayTagContainer(RangedTag)))
+		{
+			bActivated = true;
+		}
+
+		UE_LOG(LogThreadTalesCombat, Log, TEXT("[Equipment] TryActivateAbilitiesByTag (Melee/Ranged): %s"), bActivated ? TEXT("SUCCESS") : TEXT("FAILED"));
+	}
+}
+
+void UThreadTalesEquipmentComponent::ReleasePrimaryAttack()
+{
+	if (!CurrentWeapon) return;
+
+	IAbilitySystemInterface* ASI = Cast<IAbilitySystemInterface>(GetOwner());
+	if (!ASI) return;
+
+	UAbilitySystemComponent* ASC = ASI->GetAbilitySystemComponent();
+	if (!ASC) return;
+
+	for (const FGameplayAbilitySpec& Spec : ASC->GetActivatableAbilities())
+	{
+		if (Spec.IsActive())
+		{
+			if (UThreadTalesGA_RangedAttack* RangedAbility = Cast<UThreadTalesGA_RangedAttack>(Spec.GetPrimaryInstance()))
+			{
+				RangedAbility->ReleaseAndFire();
+				return;
+			}
+
+			for (UGameplayAbility* Inst : Spec.GetAbilityInstances())
+			{
+				if (UThreadTalesGA_RangedAttack* RangedAbility = Cast<UThreadTalesGA_RangedAttack>(Inst))
+				{
+					RangedAbility->ReleaseAndFire();
+					return;
+				}
+			}
+		}
 	}
 }
 

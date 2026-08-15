@@ -60,6 +60,12 @@ void AThreadTalesCharacter::OnRep_Controller()
 void AThreadTalesCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// Ensure ASC is initialized on BeginPlay
+	if (AbilitySystemComponent && (!AbilitySystemComponent->AbilityActorInfo.IsValid() || AbilitySystemComponent->AbilityActorInfo->OwnerActor == nullptr))
+	{
+		AbilitySystemComponent->InitAbilityActorInfo(this, this);
+	}
 }
 
 void AThreadTalesCharacter::ActivateAbilityByTag(FGameplayTag ContainerTag)

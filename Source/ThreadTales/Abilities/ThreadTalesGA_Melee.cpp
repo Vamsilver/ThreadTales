@@ -16,7 +16,12 @@ UThreadTalesGA_Melee::UThreadTalesGA_Melee()
 	NetExecutionPolicy = EGameplayAbilityNetExecutionPolicy::LocalPredicted;
 	InstancingPolicy = EGameplayAbilityInstancingPolicy::InstancedPerActor;
 
-	AbilityTags.AddTag(FGameplayTag::RequestGameplayTag(FName("Ability.Melee")));
+	FGameplayTag MeleeTag = FGameplayTag::RequestGameplayTag(FName("Ability.Melee"), false);
+	if (MeleeTag.IsValid())
+	{
+		AbilityTags.AddTag(MeleeTag);
+		SetAssetTags(FGameplayTagContainer(MeleeTag));
+	}
 	ActivationOwnedTags.AddTag(FGameplayTag::RequestGameplayTag(FName("State.Combat.Attacking")));
 
 	ComboSectionNames.Add(FName("Combo1"));

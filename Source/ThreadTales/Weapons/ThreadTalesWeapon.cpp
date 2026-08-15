@@ -1,6 +1,7 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "ThreadTalesWeapon.h"
+#include "ThreadTales.h"
 #include "AbilitySystemComponent.h"
 #include "AbilitySystemInterface.h"
 #include "Components/StaticMeshComponent.h"
@@ -46,14 +47,25 @@ void AThreadTalesWeapon::Equip(AActor* NewOwner)
 	ACharacter* Character = Cast<ACharacter>(NewOwner);
 	if (Character && Character->GetMesh())
 	{
-		// Attach Sheath (scabbard) to hip / sheath socket
-		if (SheathMesh && SheathMesh->GetStaticMesh())
+		// Attach Sheath (scabbard) only if weapon uses sheath and mesh is set
+		if (bHasSheath && SheathMesh && SheathMesh->GetStaticMesh() && !SheathSocketName.IsNone() && Character->GetMesh()->DoesSocketExist(SheathSocketName))
 		{
 			SheathMesh->AttachToComponent(Character->GetMesh(), FAttachmentTransformRules::SnapToTargetNotIncludingScale, SheathSocketName);
+			SheathMesh->SetVisibility(true);
+		}
+		else if (SheathMesh)
+		{
+			SheathMesh->SetVisibility(false);
 		}
 
-		// Initially, attach the blade into the Sheath socket
-		AttachToSheath();
+		if (bStartDrawn || !bHasSheath)
+		{
+			AttachToHand();
+		}
+		else
+		{
+			AttachToSheath();
+		}
 	}
 
 	// Grant Abilities
@@ -70,7 +82,12 @@ void AThreadTalesWeapon::Equip(AActor* NewOwner)
 					FGameplayAbilitySpec Spec(AbilityClass, 1, INDEX_NONE, this);
 					FGameplayAbilitySpecHandle Handle = OwnerASC->GiveAbility(Spec);
 					GrantedAbilityHandles.Add(Handle);
+					UE_LOG(LogThreadTalesCombat, Display, TEXT("[Weapon::Equip] Granted Ability '%s' to ASC of '%s'"), *AbilityClass->GetName(), *NewOwner->GetName());
 				}
+			}
+			if (GrantedAbilityHandles.Num() == 0)
+			{
+				UE_LOG(LogThreadTalesCombat, Warning, TEXT("[Weapon::Equip] Weapon '%s' has NO GrantedAbilities assigned!"), *GetName());
 			}
 		}
 	}
@@ -119,8 +136,15 @@ void AThreadTalesWeapon::AttachToSheath()
 	ACharacter* Character = Cast<ACharacter>(GetOwner());
 	if (Character && Character->GetMesh() && WeaponMesh)
 	{
-		WeaponMesh->AttachToComponent(Character->GetMesh(), FAttachmentTransformRules::SnapToTargetNotIncludingScale, SheathSocketName);
-		SetWeaponState(EWeaponCombatState::Sheathed);
+		if (bHasSheath && !SheathSocketName.IsNone() && Character->GetMesh()->DoesSocketExist(SheathSocketName))
+		{
+			WeaponMesh->AttachToComponent(Character->GetMesh(), FAttachmentTransformRules::SnapToTargetNotIncludingScale, SheathSocketName);
+			SetWeaponState(EWeaponCombatState::Sheathed);
+		}
+		else
+		{
+			AttachToHand();
+		}
 	}
 }
 
