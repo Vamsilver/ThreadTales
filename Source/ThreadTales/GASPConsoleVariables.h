@@ -8,8 +8,8 @@
 
 /**
  * Registers all console variables (CVars) that the Game Animation Sample
- * Blueprints expect to exist. Without these, the editor logs warnings like
- * "Failed to find console variable 'DDCvar.XXX'".
+ * Blueprints expect to exist. Declaring them as TAutoConsoleVariable prevents
+ * "Failed to find console variable" and performance warnings.
  *
  * Include this header in exactly ONE .cpp file (ThreadTales.cpp).
  */
@@ -41,6 +41,12 @@ namespace GASPConsoleVariables
 		TEXT("Radius for root bone translation offset."),
 		ECVF_Default);
 
+	static TAutoConsoleVariable<int32> CVarAttributeBasedRootMotion(
+		TEXT("DDCVar.AttributeBasedRootMotion.Enable"),
+		0,
+		TEXT("Enable attribute based root motion."),
+		ECVF_Default);
+
 	// ── Animation System ───────────────────────────────────────────────
 	static TAutoConsoleVariable<int32> CVarThreadSafeAnimationUpdate(
 		TEXT("DDCVar.ThreadSafeAnimationUpdate.Enable"),
@@ -54,10 +60,40 @@ namespace GASPConsoleVariables
 		TEXT("Enable the experimental state machine locomotion. 0 = off (Motion Matching), 1 = on."),
 		ECVF_Default);
 
+	static TAutoConsoleVariable<int32> CVarExperimentalStateMachineDebug(
+		TEXT("DDCVar.ExperimentalStateMachine.Debug"),
+		0,
+		TEXT("Enable debugging for experimental state machine."),
+		ECVF_Default);
+
 	static TAutoConsoleVariable<int32> CVarLocomotionSetupCMC(
 		TEXT("DDCVar.LocomotionSetupCMC"),
 		1,
 		TEXT("Locomotion setup for CMC character. 0 = Mover, 1 = CMC."),
+		ECVF_Default);
+
+	static TAutoConsoleVariable<int32> CVarLocomotionSetupMover(
+		TEXT("DDCvar.LocomotionSetupMover"),
+		1,
+		TEXT("Locomotion setup for Mover character."),
+		ECVF_Default);
+
+	static TAutoConsoleVariable<int32> CVarDefaultAnimSet(
+		TEXT("DDCVar.DefaultAnimSet"),
+		0,
+		TEXT("Default animation set."),
+		ECVF_Default);
+
+	static TAutoConsoleVariable<int32> CVarUseUnrealAnimationFramework(
+		TEXT("DDCvar.UseUnrealAnimationFramework"),
+		0,
+		TEXT("Use Unreal Animation Framework."),
+		ECVF_Default);
+
+	static TAutoConsoleVariable<int32> CVarFootPlacementMode(
+		TEXT("DDCvar.FootPlacementMode"),
+		1,
+		TEXT("0 == off, 1 == foot placement node, 2 == biped control rig"),
 		ECVF_Default);
 
 	// ── Camera ─────────────────────────────────────────────────────────
@@ -65,6 +101,49 @@ namespace GASPConsoleVariables
 		TEXT("DDCvar.CameraStyle"),
 		0,
 		TEXT("Camera style index. 0 = default third person, 1 = exploration, 2 = combat."),
+		ECVF_Default);
+
+	static TAutoConsoleVariable<int32> CVarNewGameplayCameraSystem(
+		TEXT("DDCVar.NewGameplayCameraSystem.Enable"),
+		1,
+		TEXT("Enable new gameplay camera system. 0 = off, 1 = on."),
+		ECVF_Default);
+
+	// ── Control / Input Styles ─────────────────────────────────────────
+	static TAutoConsoleVariable<int32> CVarStrafeStyle(
+		TEXT("DDCvar.StrafeStyle"),
+		1,
+		TEXT("Strafe style index."),
+		ECVF_Default);
+
+	static TAutoConsoleVariable<int32> CVarAimStyle(
+		TEXT("DDCvar.AimStyle"),
+		0,
+		TEXT("Aim style index."),
+		ECVF_Default);
+
+	static TAutoConsoleVariable<int32> CVarControlStyle(
+		TEXT("DDCvar.ControlStyle"),
+		0,
+		TEXT("Control style index."),
+		ECVF_Default);
+
+	static TAutoConsoleVariable<int32> CVarAnalogInputStyle(
+		TEXT("DDCvar.AnalogInputStyle"),
+		0,
+		TEXT("Analog input style index."),
+		ECVF_Default);
+
+	static TAutoConsoleVariable<int32> CVarPawnClass(
+		TEXT("DDCvar.PawnClass"),
+		-1,
+		TEXT("Pawn class index."),
+		ECVF_Default);
+
+	static TAutoConsoleVariable<int32> CVarVisualOverride(
+		TEXT("DDCvar.VisualOverride"),
+		-1,
+		TEXT("Visual override index."),
 		ECVF_Default);
 
 	// ── Audio Debug ────────────────────────────────────────────────────
