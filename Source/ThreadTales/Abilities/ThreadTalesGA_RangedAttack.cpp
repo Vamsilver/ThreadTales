@@ -76,6 +76,13 @@ void UThreadTalesGA_RangedAttack::ActivateAbility(const FGameplayAbilitySpecHand
 		EquipComp->DrawWeapon();
 	}
 
+	// Orient character towards camera/aim direction
+	ACharacter* Character = Cast<ACharacter>(AvatarActor);
+	if (Character && Character->GetController())
+	{
+		Character->SetActorRotation(FRotator(0.0f, Character->GetController()->GetControlRotation().Yaw, 0.0f));
+	}
+
 	ChargeStartTime = GetWorld()->GetTimeSeconds();
 	bIsCharging = true;
 
@@ -86,12 +93,9 @@ void UThreadTalesGA_RangedAttack::ActivateAbility(const FGameplayAbilitySpecHand
 	}
 
 	// Aim Montage
-	if (ActiveSlingshot->AimMontage)
+	if (ActiveSlingshot->AimMontage && Character)
 	{
-		if (ACharacter* Character = Cast<ACharacter>(AvatarActor))
-		{
-			Character->PlayAnimMontage(ActiveSlingshot->AimMontage);
-		}
+		Character->PlayAnimMontage(ActiveSlingshot->AimMontage);
 	}
 
 	UE_LOG(LogThreadTalesCombat, Display, TEXT("[GA_RangedAttack] Slingshot Aim & Charge started!"));

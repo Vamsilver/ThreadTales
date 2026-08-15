@@ -73,6 +73,9 @@ void UThreadTalesGA_Melee::ActivateAbility(const FGameplayAbilitySpecHandle Hand
 		CurrentPlayingMontage = MontageToPlay;
 		FName StartSection = ComboSectionNames.Num() > 0 ? ComboSectionNames[0] : NAME_None;
 
+		// Orient character towards camera or movement direction
+		AlignCharacterToCameraDirection();
+
 		UE_LOG(LogThreadTalesCombat, Log, TEXT("[Melee GA] Started Combo Strike 1 on Montage: %s (Section: %s)"), *GetNameSafe(MontageToPlay), *StartSection.ToString());
 
 		MontageTask = UAbilityTask_PlayMontageAndWait::CreatePlayMontageAndWaitProxy(this, NAME_None, MontageToPlay, 1.f, StartSection, true, 1.f);
@@ -145,6 +148,9 @@ void UThreadTalesGA_Melee::JumpToNextComboSection()
 	{
 		FName NextSection = ComboSectionNames[CurrentComboIndex];
 
+		// Align to camera direction on each combo swing
+		AlignCharacterToCameraDirection();
+
 		UE_LOG(LogThreadTalesCombat, Display, TEXT("[Melee GA] === Transitioning to Section: %s (Strike %d) ==="), *NextSection.ToString(), CurrentComboIndex + 1);
 
 		ACharacter* Character = Cast<ACharacter>(GetAvatarActorFromActorInfo());
@@ -157,6 +163,28 @@ void UThreadTalesGA_Melee::JumpToNextComboSection()
 	{
 		UE_LOG(LogThreadTalesCombat, Log, TEXT("[Melee GA] All combo strikes in chain completed."));
 	}
+}
+
+void UThreadTalesGA_Melee::AlignCharacterToCameraDirection()
+{
+	ACharacter* Character = Cast<ACharacter>(GetAvatarActorFromActorInfo());
+	if (!Character) return;
+
+	AController* Controller = Character->GetController();
+	if (!Controller) return;
+
+	// Calculate target Yaw from Camera/Controller
+	FRotator ControlRot = Controller->GetControlRotation();
+	FRotator TargetRotation(0.0f, ControlRot.Yaw, 0.0f);
+
+	// If player is holding a movement input (WASD), attack in that movement direction, otherwise towards camera forward
+	FVector LastInput = Character->GetLastMovementInputVector();
+	if (!LastInput.IsNearlyZero())
+	{
+		TargetRotation = FRotator(0.0f, LastInput.Rotation().Yaw, 0.0f);
+	}
+
+	Character->SetActorRotation(TargetRotation);
 }
 
 void UThreadTalesGA_Melee::OnMontageCompleted()

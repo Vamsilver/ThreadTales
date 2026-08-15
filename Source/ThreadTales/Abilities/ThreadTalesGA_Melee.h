@@ -82,4 +82,7 @@ protected:
 	void OnMontageCancelled();
 
 	void JumpToNextComboSection();
+
+	/** Aligns character yaw to camera/movement direction at the start of each strike */
+	void AlignCharacterToCameraDirection();
 };
