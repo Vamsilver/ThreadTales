@@ -33,6 +33,14 @@ AThreadTalesCharacter::AThreadTalesCharacter()
 
 	// Create equipment manager
 	EquipmentComponent = CreateDefaultSubobject<UThreadTalesEquipmentComponent>(TEXT("EquipmentComponent"));
+
+	// Enable solid Pawn-to-Pawn collision blocking so characters cannot walk through each other
+	if (GetCapsuleComponent())
+	{
+		GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
+		GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
+		GetCapsuleComponent()->CanCharacterStepUpOn = ECB_No;
+	}
 }
 
 void AThreadTalesCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -72,6 +80,13 @@ void AThreadTalesCharacter::OnRep_Controller()
 void AThreadTalesCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// Ensure solid character collision between all pawns
+	if (GetCapsuleComponent() && bIsAlive)
+	{
+		GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
+		GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
+	}
 
 	// Ensure ASC is initialized on BeginPlay
 	if (AbilitySystemComponent && (!AbilitySystemComponent->AbilityActorInfo.IsValid() || AbilitySystemComponent->AbilityActorInfo->OwnerActor == nullptr))
