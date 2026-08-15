@@ -73,6 +73,7 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 	/** The weapon currently held by the character */
 	UPROPERTY(ReplicatedUsing = OnRep_CurrentWeapon, Transient)

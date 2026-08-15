@@ -69,3 +69,99 @@ void AThreadTalesCharacter::ActivateAbilityByTag(FGameplayTag ContainerTag)
 		AbilitySystemComponent->TryActivateAbilitiesByTag(FGameplayTagContainer(ContainerTag));
 	}
 }
+
+void AThreadTalesCharacter::DebugSwitchCharacter(TSubclassOf<AThreadTalesCharacter> NewCharacterClass)
+{
+	if (!NewCharacterClass)
+	{
+		UE_LOG(LogThreadTales, Warning, TEXT("[Debug] DebugSwitchCharacter failed: NewCharacterClass is null!"));
+		return;
+	}
+
+	if (GetClass() == NewCharacterClass)
+	{
+		UE_LOG(LogThreadTales, Log, TEXT("[Debug] Already playing as %s!"), *NewCharacterClass->GetName());
+		return;
+	}
+
+	AController* SavedController = GetController();
+	if (!SavedController)
+	{
+		UE_LOG(LogThreadTales, Warning, TEXT("[Debug] DebugSwitchCharacter failed: Character has no controller!"));
+		return;
+	}
+
+	UWorld* World = GetWorld();
+	if (!World) return;
+
+	FTransform SpawnTransform = GetActorTransform();
+	FRotator ControlRot = SavedController->GetControlRotation();
+
+	// Preserve references to switch back
+	TSubclassOf<AThreadTalesCharacter> SavedMaleClass = DebugMaleClass;
+	TSubclassOf<AThreadTalesCharacter> SavedFemaleClass = DebugFemaleClass;
+
+	// Unpossess current character
+	SavedController->UnPossess();
+
+	// Spawn new character at the exact same transform
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+
+	AThreadTalesCharacter* NewChar = World->SpawnActor<AThreadTalesCharacter>(NewCharacterClass, SpawnTransform, SpawnParams);
+	if (NewChar)
+	{
+		// Pass debug references forward if not set on the new instance
+		if (!NewChar->DebugMaleClass) NewChar->DebugMaleClass = SavedMaleClass;
+		if (!NewChar->DebugFemaleClass) NewChar->DebugFemaleClass = SavedFemaleClass;
+
+		SavedController->Possess(NewChar);
+		SavedController->SetControlRotation(ControlRot);
+		UE_LOG(LogThreadTales, Display, TEXT("[Debug] Successfully switched character to: %s"), *NewCharacterClass->GetName());
+	}
+
+	// Clean up old character's equipment so weapon is destroyed
+	if (EquipmentComponent)
+	{
+		EquipmentComponent->UnequipWeapon();
+	}
+
+	// Destroy old character
+	Destroy();
+}
+
+void AThreadTalesCharacter::DebugSwitchToMale()
+{
+	if (DebugMaleClass)
+	{
+		DebugSwitchCharacter(DebugMaleClass);
+	}
+	else
+	{
+		UE_LOG(LogThreadTales, Warning, TEXT("[Debug] DebugSwitchToMale: DebugMaleClass is not assigned on character!"));
+	}
+}
+
+void AThreadTalesCharacter::DebugSwitchToFemale()
+{
+	if (DebugFemaleClass)
+	{
+		DebugSwitchCharacter(DebugFemaleClass);
+	}
+	else
+	{
+		UE_LOG(LogThreadTales, Warning, TEXT("[Debug] DebugSwitchToFemale: DebugFemaleClass is not assigned on character!"));
+	}
+}
+
+void AThreadTalesCharacter::DebugToggleGender()
+{
+	if (DebugMaleClass && IsA(DebugMaleClass))
+	{
+		DebugSwitchToFemale();
+	}
+	else
+	{
+		DebugSwitchToMale();
+	}
+}

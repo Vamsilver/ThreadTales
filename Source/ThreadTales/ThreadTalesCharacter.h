@@ -56,4 +56,28 @@ public:
 	/** Example variable to prove C++ connection */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ThreadTales|Stats")
 	float MaxHealth;
+
+	/** Debug reference for Male hero class (BP_HeroMale) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ThreadTales|Debug")
+	TSubclassOf<AThreadTalesCharacter> DebugMaleClass;
+
+	/** Debug reference for Female hero class (BP_HeroFemale) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ThreadTales|Debug")
+	TSubclassOf<AThreadTalesCharacter> DebugFemaleClass;
+
+	/** Switches current character to the specified class */
+	UFUNCTION(BlueprintCallable, Category = "ThreadTales|Debug")
+	void DebugSwitchCharacter(TSubclassOf<AThreadTalesCharacter> NewCharacterClass);
+
+	/** Switch to Male character (can also be called via ~ console: DebugSwitchToMale) */
+	UFUNCTION(Exec, BlueprintCallable, Category = "ThreadTales|Debug")
+	void DebugSwitchToMale();
+
+	/** Switch to Female character (can also be called via ~ console: DebugSwitchToFemale) */
+	UFUNCTION(Exec, BlueprintCallable, Category = "ThreadTales|Debug")
+	void DebugSwitchToFemale();
+
+	/** Toggles between Male and Female characters (can also be called via ~ console: DebugToggleGender) */
+	UFUNCTION(Exec, BlueprintCallable, Category = "ThreadTales|Debug")
+	void DebugToggleGender();
 };

@@ -25,6 +25,12 @@ void UThreadTalesEquipmentComponent::BeginPlay()
 	Super::BeginPlay();
 }
 
+void UThreadTalesEquipmentComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	UnequipWeapon();
+	Super::EndPlay(EndPlayReason);
+}
+
 void UThreadTalesEquipmentComponent::EquipWeapon(TSubclassOf<AThreadTalesWeapon> WeaponClass)
 {
 	if (!GetOwner()->HasAuthority())
