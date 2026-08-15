@@ -12,8 +12,11 @@ class UThreadTalesAttributeSet;
 
 DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnHealthChangedDelegate, float, CurrentHealth, float, MaxHealth);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnCharacterDeathDelegate, AActor*, DeadActor, AActor*, KillerActor);
+
 UCLASS(config=Game)
-class AThreadTalesCharacter : public ACharacter, public IAbilitySystemInterface
+class THREADTALES_API AThreadTalesCharacter : public ACharacter, public IAbilitySystemInterface
 {
 	GENERATED_BODY()
 
@@ -22,6 +25,35 @@ public:
 
 	// Implement IAbilitySystemInterface
 	virtual class UAbilitySystemComponent* GetAbilitySystemComponent() const override;
+
+	/** Called when health changes */
+	UPROPERTY(BlueprintAssignable, Category = "ThreadTales|Health")
+	FOnHealthChangedDelegate OnHealthChanged;
+
+	/** Called when character dies */
+	UPROPERTY(BlueprintAssignable, Category = "ThreadTales|Health")
+	FOnCharacterDeathDelegate OnCharacterDeath;
+
+	/** Returns current health */
+	UFUNCTION(BlueprintPure, Category = "ThreadTales|Health")
+	float GetHealth() const;
+
+	/** Returns maximum health */
+	UFUNCTION(BlueprintPure, Category = "ThreadTales|Health")
+	float GetMaxHealth() const;
+
+	/** Returns true if character is alive */
+	UFUNCTION(BlueprintPure, Category = "ThreadTales|Health")
+	bool IsAlive() const { return bIsAlive; }
+
+	/** Handles health change notifications */
+	virtual void HandleHealthChanged(float NewHealth, float MaxHealthVal);
+
+	/** Handles character death */
+	UFUNCTION(BlueprintCallable, Category = "ThreadTales|Health")
+	virtual void Die(AActor* KillerActor);
+
+	virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, class AController* EventInstigator, AActor* DamageCauser) override;
 
 protected:
 	virtual void BeginPlay() override;
@@ -43,6 +75,15 @@ protected:
 	// Equipment Manager
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Equipment", meta = (AllowPrivateAccess = "true"))
 	class UThreadTalesEquipmentComponent* EquipmentComponent;
+
+	/** Whether the character is currently alive */
+	UPROPERTY(ReplicatedUsing = OnRep_IsAlive, BlueprintReadOnly, Category = "ThreadTales|Health")
+	bool bIsAlive;
+
+	UFUNCTION()
+	virtual void OnRep_IsAlive();
+
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 public:
 	// Helper function to trigger abilities (e.g. from Input Actions)

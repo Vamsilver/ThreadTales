@@ -5,6 +5,10 @@
 #include "ThreadTalesAbilitySystemComponent.h"
 #include "ThreadTalesAttributeSet.h"
 #include "ThreadTalesEquipmentComponent.h"
+#include "ThreadTalesPlayerController.h"
+#include "Components/CapsuleComponent.h"
+#include "GameFramework/CharacterMovementComponent.h"
+#include "Net/UnrealNetwork.h"
 
 AThreadTalesCharacter::AThreadTalesCharacter()
 {
@@ -17,6 +21,7 @@ AThreadTalesCharacter::AThreadTalesCharacter()
 	bUseControllerRotationRoll = false;
 
 	MaxHealth = 100.0f;
+	bIsAlive = true;
 
 	// Create ability system component, and set it to be explicitly replicated
 	AbilitySystemComponent = CreateDefaultSubobject<UThreadTalesAbilitySystemComponent>(TEXT("AbilitySystemComponent"));
@@ -28,6 +33,13 @@ AThreadTalesCharacter::AThreadTalesCharacter()
 
 	// Create equipment manager
 	EquipmentComponent = CreateDefaultSubobject<UThreadTalesEquipmentComponent>(TEXT("EquipmentComponent"));
+}
+
+void AThreadTalesCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+	DOREPLIFETIME(AThreadTalesCharacter, bIsAlive);
 }
 
 UAbilitySystemComponent* AThreadTalesCharacter::GetAbilitySystemComponent() const
@@ -73,6 +85,107 @@ void AThreadTalesCharacter::ActivateAbilityByTag(FGameplayTag ContainerTag)
 	if (AbilitySystemComponent)
 	{
 		AbilitySystemComponent->TryActivateAbilitiesByTag(FGameplayTagContainer(ContainerTag));
+	}
+}
+
+float AThreadTalesCharacter::GetHealth() const
+{
+	return AttributeSet ? AttributeSet->GetHealth() : 0.0f;
+}
+
+float AThreadTalesCharacter::GetMaxHealth() const
+{
+	return AttributeSet ? AttributeSet->GetMaxHealth() : 0.0f;
+}
+
+void AThreadTalesCharacter::HandleHealthChanged(float NewHealth, float MaxHealthVal)
+{
+	OnHealthChanged.Broadcast(NewHealth, MaxHealthVal);
+}
+
+float AThreadTalesCharacter::TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, class AController* EventInstigator, AActor* DamageCauser)
+{
+	float ActualDamage = Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
+
+	if (!bIsAlive || DamageAmount <= 0.0f)
+	{
+		return 0.0f;
+	}
+
+	if (HasAuthority() && AttributeSet)
+	{
+		const float OldHealth = AttributeSet->GetHealth();
+		const float NewHealth = FMath::Clamp(OldHealth - DamageAmount, 0.0f, AttributeSet->GetMaxHealth());
+
+		const_cast<UThreadTalesAttributeSet*>(AttributeSet)->SetHealth(NewHealth);
+
+		UE_LOG(LogThreadTalesCombat, Display, TEXT("[AttributeSet] %s took %.1f damage. Remaining Health: %.1f / %.1f"),
+			*GetName(), DamageAmount, NewHealth, AttributeSet->GetMaxHealth());
+
+		HandleHealthChanged(NewHealth, AttributeSet->GetMaxHealth());
+
+		if (NewHealth <= 0.0f)
+		{
+			Die(DamageCauser);
+		}
+	}
+
+	return ActualDamage;
+}
+
+void AThreadTalesCharacter::Die(AActor* KillerActor)
+{
+	if (!bIsAlive)
+	{
+		return;
+	}
+
+	bIsAlive = false;
+
+	UE_LOG(LogThreadTalesCombat, Display, TEXT("[Character] %s has DIED! Killed by: %s"), *GetName(), KillerActor ? *KillerActor->GetName() : TEXT("Unknown"));
+
+	// Disable movement and capsule collision
+	if (GetCharacterMovement())
+	{
+		GetCharacterMovement()->DisableMovement();
+		GetCharacterMovement()->StopMovementImmediately();
+	}
+
+	if (GetCapsuleComponent())
+	{
+		GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	}
+
+	// Enable ragdoll physics on character mesh
+	if (GetMesh())
+	{
+		GetMesh()->SetCollisionProfileName(TEXT("Ragdoll"));
+		GetMesh()->SetSimulatePhysics(true);
+	}
+
+	OnCharacterDeath.Broadcast(this, KillerActor);
+}
+
+void AThreadTalesCharacter::OnRep_IsAlive()
+{
+	if (!bIsAlive)
+	{
+		if (GetCharacterMovement())
+		{
+			GetCharacterMovement()->DisableMovement();
+			GetCharacterMovement()->StopMovementImmediately();
+		}
+
+		if (GetCapsuleComponent())
+		{
+			GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		}
+
+		if (GetMesh())
+		{
+			GetMesh()->SetCollisionProfileName(TEXT("Ragdoll"));
+			GetMesh()->SetSimulatePhysics(true);
+		}
 	}
 }
 

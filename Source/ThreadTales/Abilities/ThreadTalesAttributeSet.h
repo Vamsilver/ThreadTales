@@ -40,6 +40,11 @@ public:
 	FGameplayAttributeData MaxHealth;
 	ATTRIBUTE_ACCESSORS(UThreadTalesAttributeSet, MaxHealth)
 
+	// Meta Attribute: Incoming Damage (Server-side only, modifies Health directly)
+	UPROPERTY(BlueprintReadOnly, Category = "Attributes|Damage")
+	FGameplayAttributeData Damage;
+	ATTRIBUTE_ACCESSORS(UThreadTalesAttributeSet, Damage)
+
 	// Functions for network replication
 	UFUNCTION()
 	virtual void OnRep_Health(const FGameplayAttributeData& OldHealth);

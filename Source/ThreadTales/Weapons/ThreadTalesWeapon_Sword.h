@@ -33,4 +33,12 @@ public:
 	// Enables or disables the hitbox (called from Animation Notifies)
 	UFUNCTION(BlueprintCallable, Category = "Combat")
 	void SetHitboxEnabled(bool bEnabled);
+
+	/** Base damage dealt by sword strikes */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Combat")
+	float BaseDamage;
+
+private:
+	/** Tracks actors already hit during the current attack swing */
+	TSet<TWeakObjectPtr<AActor>> HitActorsThisSwing;
 };

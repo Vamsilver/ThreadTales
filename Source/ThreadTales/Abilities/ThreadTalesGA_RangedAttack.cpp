@@ -16,19 +16,20 @@ UThreadTalesGA_RangedAttack::UThreadTalesGA_RangedAttack()
 	InstancingPolicy = EGameplayAbilityInstancingPolicy::InstancedPerActor;
 	AbilityName = TEXT("SlingshotAttack");
 
+	FGameplayTagContainer Tags;
 	FGameplayTag ParentRangedTag = FGameplayTag::RequestGameplayTag(TEXT("Ability.Ranged"), false);
 	if (ParentRangedTag.IsValid())
 	{
-		AbilityTags.AddTag(ParentRangedTag);
+		Tags.AddTag(ParentRangedTag);
 	}
 
 	FGameplayTag SpecificRangedTag = FGameplayTag::RequestGameplayTag(TEXT("Ability.Ranged.Slingshot"), false);
 	if (SpecificRangedTag.IsValid())
 	{
-		AbilityTags.AddTag(SpecificRangedTag);
+		Tags.AddTag(SpecificRangedTag);
 	}
 
-	SetAssetTags(AbilityTags);
+	SetAssetTags(Tags);
 
 	FGameplayTag AimingTag = FGameplayTag::RequestGameplayTag(TEXT("State.Combat.Aiming"), false);
 	if (AimingTag.IsValid())
