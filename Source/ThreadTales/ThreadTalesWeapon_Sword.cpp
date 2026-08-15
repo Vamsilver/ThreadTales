@@ -8,7 +8,7 @@
 AThreadTalesWeapon_Sword::AThreadTalesWeapon_Sword()
 {
 	Hitbox = CreateDefaultSubobject<UBoxComponent>(TEXT("Hitbox"));
-	Hitbox->SetupAttachment(RootComponent);
+	Hitbox->SetupAttachment(WeaponMesh);
 	Hitbox->SetCollisionEnabled(ECollisionEnabled::NoCollision); // Disabled by default, enabled during attack anim
 	Hitbox->SetCollisionResponseToAllChannels(ECR_Ignore);
 	Hitbox->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap);

@@ -46,8 +46,12 @@ protected:
 
 public:
 	// Helper function to trigger abilities (e.g. from Input Actions)
-	UFUNCTION(BlueprintCallable, Category = "Abilities")
+	UFUNCTION(BlueprintCallable, Category = "ThreadTales|Abilities")
 	void ActivateAbilityByTag(FGameplayTag ContainerTag);
+
+	/** Returns equipment component */
+	UFUNCTION(BlueprintPure, Category = "ThreadTales|Equipment")
+	class UThreadTalesEquipmentComponent* GetEquipmentComponent() const { return EquipmentComponent; }
 
 	/** Example variable to prove C++ connection */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ThreadTales|Stats")
