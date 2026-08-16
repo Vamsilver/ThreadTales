@@ -87,6 +87,35 @@ void UThreadTalesAttributeSet::PostGameplayEffectExecute(const struct FGameplayE
 	}
 }
 
+void UThreadTalesAttributeSet::ReceiveDamage(float DamageAmount, AActor* SourceActor)
+{
+	if (DamageAmount <= 0.0f) return;
+
+	const float OldHealth = GetHealth();
+	const float NewHealth = FMath::Clamp(OldHealth - DamageAmount, 0.0f, GetMaxHealth());
+	SetHealth(NewHealth);
+
+	AActor* TargetActor = GetOwningActor();
+	if (AThreadTalesCharacter* TTChar = Cast<AThreadTalesCharacter>(TargetActor))
+	{
+		TTChar->HandleHealthChanged(NewHealth, GetMaxHealth());
+		if (NewHealth <= 0.0f && TTChar->IsAlive())
+		{
+			TTChar->Die(SourceActor);
+		}
+	}
+}
+
+void UThreadTalesAttributeSet::ResetHealth()
+{
+	SetHealth(GetMaxHealth());
+	AActor* TargetActor = GetOwningActor();
+	if (AThreadTalesCharacter* TTChar = Cast<AThreadTalesCharacter>(TargetActor))
+	{
+		TTChar->HandleHealthChanged(GetMaxHealth(), GetMaxHealth());
+	}
+}
+
 void UThreadTalesAttributeSet::OnRep_Health(const FGameplayAttributeData& OldHealth)
 {
 	GAMEPLAYATTRIBUTE_REPNOTIFY(UThreadTalesAttributeSet, Health, OldHealth);
@@ -96,3 +125,4 @@ void UThreadTalesAttributeSet::OnRep_MaxHealth(const FGameplayAttributeData& Old
 {
 	GAMEPLAYATTRIBUTE_REPNOTIFY(UThreadTalesAttributeSet, MaxHealth, OldMaxHealth);
 }
+

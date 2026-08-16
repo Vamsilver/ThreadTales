@@ -85,10 +85,10 @@ void AThreadTalesProjectile::OnHit(UPrimitiveComponent* HitComponent, AActor* Ot
 		UGameplayStatics::SpawnEmitterAtLocation(GetWorld(), ImpactEmitter, Hit.ImpactPoint, Hit.ImpactNormal.Rotation());
 	}
 
-	// Apply damage to hit actor (if not already damaged and is a character/pawn)
+	// Apply damage to hit actor (if not already damaged and is a damageable entity / pawn)
 	if (!bHasDealtDamage && OtherActor && OtherActor != this && OtherActor != GetOwner())
 	{
-		if (Cast<APawn>(OtherActor) || OtherActor->FindComponentByClass<UPrimitiveComponent>())
+		if (Cast<APawn>(OtherActor) || OtherActor->CanBeDamaged())
 		{
 			AController* InstigatorController = GetInstigatorController();
 			UGameplayStatics::ApplyPointDamage(OtherActor, BaseDamage, Hit.ImpactNormal, Hit, InstigatorController, this, UDamageType::StaticClass());

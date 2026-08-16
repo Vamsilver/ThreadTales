@@ -1,0 +1,24 @@
+// Copyright Epic Games, Inc. All Rights Reserved.
+
+#pragma once
+
+#include "CoreMinimal.h"
+#include "NativeGameplayTags.h"
+
+namespace ThreadTalesGameplayTags
+{
+	// Abilities
+	THREADTALES_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_Ability_Melee);
+	THREADTALES_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_Ability_Ranged);
+	THREADTALES_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_Ability_Ranged_Slingshot);
+	THREADTALES_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_Ability_Evade);
+	THREADTALES_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_Ability_Movement_DoubleJump);
+
+	// Combat & Movement States
+	THREADTALES_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_State_Combat_InCombat);
+	THREADTALES_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_State_Combat_Attacking);
+	THREADTALES_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_State_Combat_Aiming);
+	THREADTALES_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_State_Combat_Evading);
+	THREADTALES_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_State_Combat_Invulnerable);
+	THREADTALES_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_State_Movement_DoubleJumping);
+}

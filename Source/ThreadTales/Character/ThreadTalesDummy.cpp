@@ -26,6 +26,10 @@ void AThreadTalesDummy::BeginPlay()
 	Super::BeginPlay();
 
 	InitialSpawnTransform = GetActorTransform();
+	if (GetMesh())
+	{
+		InitialMeshRelativeTransform = GetMesh()->GetRelativeTransform();
+	}
 }
 
 float AThreadTalesDummy::TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, class AController* EventInstigator, AActor* DamageCauser)
@@ -63,8 +67,7 @@ void AThreadTalesDummy::Respawn()
 	// Reset Health in AttributeSet
 	if (AttributeSet)
 	{
-		const_cast<UThreadTalesAttributeSet*>(AttributeSet)->SetHealth(AttributeSet->GetMaxHealth());
-		HandleHealthChanged(AttributeSet->GetMaxHealth(), AttributeSet->GetMaxHealth());
+		AttributeSet->ResetHealth();
 	}
 
 	// Restore Mesh physics and animation
@@ -72,7 +75,7 @@ void AThreadTalesDummy::Respawn()
 	{
 		GetMesh()->SetSimulatePhysics(false);
 		GetMesh()->AttachToComponent(GetCapsuleComponent(), FAttachmentTransformRules::SnapToTargetIncludingScale);
-		GetMesh()->SetRelativeLocationAndRotation(FVector(0.f, 0.f, -90.f), FRotator(0.f, -90.f, 0.f));
+		GetMesh()->SetRelativeTransform(InitialMeshRelativeTransform);
 		GetMesh()->SetCollisionProfileName(TEXT("CharacterMesh"));
 	}
 

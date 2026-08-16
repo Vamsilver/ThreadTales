@@ -2,6 +2,7 @@
 
 #include "ThreadTalesGA_RangedAttack.h"
 #include "ThreadTales.h"
+#include "ThreadTalesGameplayTags.h"
 #include "Weapons/ThreadTalesWeapon_Slingshot.h"
 #include "Character/ThreadTalesEquipmentComponent.h"
 #include "Components/ArrowComponent.h"
@@ -17,25 +18,11 @@ UThreadTalesGA_RangedAttack::UThreadTalesGA_RangedAttack()
 	AbilityName = TEXT("SlingshotAttack");
 
 	FGameplayTagContainer Tags;
-	FGameplayTag ParentRangedTag = FGameplayTag::RequestGameplayTag(TEXT("Ability.Ranged"), false);
-	if (ParentRangedTag.IsValid())
-	{
-		Tags.AddTag(ParentRangedTag);
-	}
-
-	FGameplayTag SpecificRangedTag = FGameplayTag::RequestGameplayTag(TEXT("Ability.Ranged.Slingshot"), false);
-	if (SpecificRangedTag.IsValid())
-	{
-		Tags.AddTag(SpecificRangedTag);
-	}
-
+	Tags.AddTag(ThreadTalesGameplayTags::TAG_Ability_Ranged);
+	Tags.AddTag(ThreadTalesGameplayTags::TAG_Ability_Ranged_Slingshot);
 	SetAssetTags(Tags);
 
-	FGameplayTag AimingTag = FGameplayTag::RequestGameplayTag(TEXT("State.Combat.Aiming"), false);
-	if (AimingTag.IsValid())
-	{
-		ActivationOwnedTags.AddTag(AimingTag);
-	}
+	ActivationOwnedTags.AddTag(ThreadTalesGameplayTags::TAG_State_Combat_Aiming);
 
 	bIsCharging = false;
 	ChargeStartTime = 0.0f;

@@ -43,5 +43,6 @@ protected:
 
 private:
 	FTransform InitialSpawnTransform;
+	FTransform InitialMeshRelativeTransform;
 	FTimerHandle RespawnTimerHandle;
 };
