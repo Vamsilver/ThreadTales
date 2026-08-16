@@ -31,8 +31,7 @@ protected:
 
 public:
 	// Enables or disables the hitbox (called from Animation Notifies)
-	UFUNCTION(BlueprintCallable, Category = "Combat")
-	void SetHitboxEnabled(bool bEnabled);
+	virtual void SetHitboxEnabled(bool bEnabled) override;
 
 	/** Base damage dealt by sword strikes */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Combat")

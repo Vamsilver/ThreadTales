@@ -25,7 +25,11 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ThreadTales|Combo")
 	TArray<FName> ComboSectionNames;
 
-	/** Fallback Montage to play if weapon doesn't have one assigned */
+	/** Array of individual combo strike montages (Strike1, Strike2, Strike3, Strike4) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ThreadTales|Combo")
+	TArray<UAnimMontage*> ComboStrikeMontages;
+
+	/** Fallback single Montage to play if weapon doesn't have one assigned */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ThreadTales|Combo")
 	UAnimMontage* FallbackAttackMontage;
 
@@ -34,6 +38,8 @@ public:
 	float InputBufferTolerance = 0.4f;
 
 	virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData) override;
+
+	void PlayComboStrike(int32 Index);
 
 	/** Called when attack button is pressed while this ability is running */
 	UFUNCTION(BlueprintCallable, Category = "ThreadTales|Combo")

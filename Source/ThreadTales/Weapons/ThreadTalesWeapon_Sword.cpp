@@ -2,6 +2,7 @@
 
 #include "ThreadTalesWeapon_Sword.h"
 #include "ThreadTales.h"
+#include "ThreadTalesGameplayTags.h"
 #include "Components/BoxComponent.h"
 #include "AbilitySystemComponent.h"
 #include "GameFramework/Character.h"
@@ -9,6 +10,8 @@
 
 AThreadTalesWeapon_Sword::AThreadTalesWeapon_Sword()
 {
+	PrimaryAttackTag = ThreadTalesGameplayTags::TAG_Ability_Melee;
+
 	Hitbox = CreateDefaultSubobject<UBoxComponent>(TEXT("Hitbox"));
 	Hitbox->SetupAttachment(WeaponMesh);
 	Hitbox->InitBoxExtent(FVector(15.0f, 15.0f, 60.0f)); // Covers length of sword blade

@@ -4,6 +4,7 @@
 #include "ThreadTalesProjectile.h"
 #include "Abilities/ThreadTalesGA_RangedAttack.h"
 #include "ThreadTales.h"
+#include "ThreadTalesGameplayTags.h"
 #include "Components/ArrowComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Net/UnrealNetwork.h"
@@ -12,6 +13,8 @@
 
 AThreadTalesWeapon_Slingshot::AThreadTalesWeapon_Slingshot()
 {
+	PrimaryAttackTag = ThreadTalesGameplayTags::TAG_Ability_Ranged_Slingshot;
+
 	ProjectileSpawnPoint = CreateDefaultSubobject<UArrowComponent>(TEXT("ProjectileSpawnPoint"));
 	ProjectileSpawnPoint->SetupAttachment(WeaponMesh);
 

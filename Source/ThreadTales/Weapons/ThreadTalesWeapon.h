@@ -74,6 +74,17 @@ public:
 	UFUNCTION(BlueprintPure, Category = "ThreadTales|Weapon")
 	UAnimMontage* GetComboAttackMontage() const { return ComboAttackMontage; }
 
+	UFUNCTION(BlueprintPure, Category = "ThreadTales|Weapon")
+	const TArray<UAnimMontage*>& GetComboStrikeMontages() const { return ComboStrikeMontages; }
+
+	/** Enables or disables the weapon hitbox (if supported by weapon subclass) */
+	UFUNCTION(BlueprintCallable, Category = "ThreadTales|Weapon")
+	virtual void SetHitboxEnabled(bool bEnabled) {}
+
+	/** Returns primary attack gameplay tag */
+	UFUNCTION(BlueprintPure, Category = "ThreadTales|Weapon")
+	FGameplayTag GetPrimaryAttackTag() const { return PrimaryAttackTag; }
+
 	/** Event triggered when weapon state changes */
 	UPROPERTY(BlueprintAssignable, Category = "ThreadTales|Weapon")
 	FOnWeaponStateChanged OnWeaponStateChanged;
@@ -117,9 +128,17 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ThreadTales|Animations")
 	UAnimMontage* SheathMontage;
 
-	/** Montage containing the combo attack chain */
+	/** Single Montage containing the combo attack chain with sections */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ThreadTales|Animations")
 	UAnimMontage* ComboAttackMontage;
+
+	/** Array of individual combo strike montages (e.g. Strike1, Strike2, Strike3, Strike4) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ThreadTales|Animations")
+	TArray<UAnimMontage*> ComboStrikeMontages;
+
+	/** The primary gameplay tag triggered by this weapon's primary attack action */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ThreadTales|Abilities")
+	FGameplayTag PrimaryAttackTag;
 
 	/** The abilities granted when this weapon is equipped */
 	UPROPERTY(EditDefaultsOnly, Category = "ThreadTales|Abilities")

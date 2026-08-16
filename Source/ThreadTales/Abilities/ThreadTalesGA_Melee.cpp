@@ -2,6 +2,7 @@
 
 #include "ThreadTalesGA_Melee.h"
 #include "ThreadTales.h"
+#include "ThreadTalesGameplayTags.h"
 #include "Abilities/Tasks/AbilityTask_PlayMontageAndWait.h"
 #include "ThreadTalesEquipmentComponent.h"
 #include "ThreadTalesWeapon.h"
@@ -16,12 +17,8 @@ UThreadTalesGA_Melee::UThreadTalesGA_Melee()
 	NetExecutionPolicy = EGameplayAbilityNetExecutionPolicy::LocalPredicted;
 	InstancingPolicy = EGameplayAbilityInstancingPolicy::InstancedPerActor;
 
-	FGameplayTag MeleeTag = FGameplayTag::RequestGameplayTag(FName("Ability.Melee"), false);
-	if (MeleeTag.IsValid())
-	{
-		SetAssetTags(FGameplayTagContainer(MeleeTag));
-	}
-	ActivationOwnedTags.AddTag(FGameplayTag::RequestGameplayTag(FName("State.Combat.Attacking")));
+	SetAssetTags(FGameplayTagContainer(ThreadTalesGameplayTags::TAG_Ability_Melee));
+	ActivationOwnedTags.AddTag(ThreadTalesGameplayTags::TAG_State_Combat_Attacking);
 
 	ComboSectionNames.Add(FName("Combo1"));
 	ComboSectionNames.Add(FName("Combo2"));
@@ -51,46 +48,106 @@ void UThreadTalesGA_Melee::ActivateAbility(const FGameplayAbilitySpecHandle Hand
 		return;
 	}
 
-	UAnimMontage* MontageToPlay = FallbackAttackMontage;
+	PlayComboStrike(0);
+}
 
-	// Check if current weapon has its own combo montage
+void UThreadTalesGA_Melee::PlayComboStrike(int32 Index)
+{
+	// Orient character towards camera or movement direction
+	AlignCharacterToCameraDirection();
+
+	// 1. Check if weapon or ability provides an array of separate combo strike montages
+	TArray<UAnimMontage*> ActiveStrikeMontages = ComboStrikeMontages;
 	AActor* Avatar = GetAvatarActorFromActorInfo();
 	if (Avatar)
 	{
 		UThreadTalesEquipmentComponent* EquipComp = Avatar->FindComponentByClass<UThreadTalesEquipmentComponent>();
-		if (EquipComp && EquipComp->GetCurrentWeapon())
+		if (EquipComp && EquipComp->GetCurrentWeapon() && EquipComp->GetCurrentWeapon()->GetComboStrikeMontages().Num() > 0)
 		{
-			UAnimMontage* WeaponMontage = EquipComp->GetCurrentWeapon()->GetComboAttackMontage();
-			if (WeaponMontage)
-			{
-				MontageToPlay = WeaponMontage;
-			}
+			ActiveStrikeMontages = EquipComp->GetCurrentWeapon()->GetComboStrikeMontages();
 		}
 	}
 
-	if (MontageToPlay)
+	if (ActiveStrikeMontages.Num() > 0)
 	{
-		CurrentPlayingMontage = MontageToPlay;
-		FName StartSection = ComboSectionNames.Num() > 0 ? ComboSectionNames[0] : NAME_None;
-
-		// Orient character towards camera or movement direction
-		AlignCharacterToCameraDirection();
-
-		UE_LOG(LogThreadTalesCombat, Log, TEXT("[Melee GA] Started Combo Strike 1 on Montage: %s (Section: %s)"), *GetNameSafe(MontageToPlay), *StartSection.ToString());
-
-		MontageTask = UAbilityTask_PlayMontageAndWait::CreatePlayMontageAndWaitProxy(this, NAME_None, MontageToPlay, 1.f, StartSection, true, 1.f);
-		if (MontageTask)
+		if (ActiveStrikeMontages.IsValidIndex(Index) && ActiveStrikeMontages[Index])
 		{
-			MontageTask->OnCompleted.AddDynamic(this, &UThreadTalesGA_Melee::OnMontageCompleted);
-			MontageTask->OnInterrupted.AddDynamic(this, &UThreadTalesGA_Melee::OnMontageInterrupted);
-			MontageTask->OnCancelled.AddDynamic(this, &UThreadTalesGA_Melee::OnMontageCancelled);
-			MontageTask->ReadyForActivation();
+			UAnimMontage* MontageToPlay = ActiveStrikeMontages[Index];
+			CurrentPlayingMontage = MontageToPlay;
+
+			UE_LOG(LogThreadTalesCombat, Display, TEXT("[Melee GA] Playing Separate Strike %d Montage: %s"), Index + 1, *GetNameSafe(MontageToPlay));
+
+			if (MontageTask)
+			{
+				MontageTask->EndTask();
+			}
+
+			MontageTask = UAbilityTask_PlayMontageAndWait::CreatePlayMontageAndWaitProxy(this, NAME_None, MontageToPlay, 1.f, NAME_None, true, 1.f);
+			if (MontageTask)
+			{
+				MontageTask->OnCompleted.AddDynamic(this, &UThreadTalesGA_Melee::OnMontageCompleted);
+				MontageTask->OnInterrupted.AddDynamic(this, &UThreadTalesGA_Melee::OnMontageInterrupted);
+				MontageTask->OnCancelled.AddDynamic(this, &UThreadTalesGA_Melee::OnMontageCancelled);
+				MontageTask->ReadyForActivation();
+			}
+			return;
+		}
+		else
+		{
+			UE_LOG(LogThreadTalesCombat, Log, TEXT("[Melee GA] Reached end of separate combo strike chain (%d strikes)."), ActiveStrikeMontages.Num());
+			EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, false);
+			return;
+		}
+	}
+
+	// 2. Fallback to Section-based single Montage
+	UAnimMontage* SingleMontage = FallbackAttackMontage;
+	if (Avatar)
+	{
+		UThreadTalesEquipmentComponent* EquipComp = Avatar->FindComponentByClass<UThreadTalesEquipmentComponent>();
+		if (EquipComp && EquipComp->GetCurrentWeapon() && EquipComp->GetCurrentWeapon()->GetComboAttackMontage())
+		{
+			SingleMontage = EquipComp->GetCurrentWeapon()->GetComboAttackMontage();
+		}
+	}
+
+	if (SingleMontage)
+	{
+		CurrentPlayingMontage = SingleMontage;
+		if (Index == 0)
+		{
+			FName StartSection = ComboSectionNames.Num() > 0 ? ComboSectionNames[0] : NAME_None;
+			UE_LOG(LogThreadTalesCombat, Log, TEXT("[Melee GA] Started Section Combo Strike 1 on Montage: %s (Section: %s)"), *GetNameSafe(SingleMontage), *StartSection.ToString());
+
+			MontageTask = UAbilityTask_PlayMontageAndWait::CreatePlayMontageAndWaitProxy(this, NAME_None, SingleMontage, 1.f, StartSection, true, 1.f);
+			if (MontageTask)
+			{
+				MontageTask->OnCompleted.AddDynamic(this, &UThreadTalesGA_Melee::OnMontageCompleted);
+				MontageTask->OnInterrupted.AddDynamic(this, &UThreadTalesGA_Melee::OnMontageInterrupted);
+				MontageTask->OnCancelled.AddDynamic(this, &UThreadTalesGA_Melee::OnMontageCancelled);
+				MontageTask->ReadyForActivation();
+			}
+		}
+		else if (ComboSectionNames.IsValidIndex(Index))
+		{
+			FName NextSection = ComboSectionNames[Index];
+			UE_LOG(LogThreadTalesCombat, Display, TEXT("[Melee GA] === Transitioning to Section: %s (Strike %d) ==="), *NextSection.ToString(), Index + 1);
+
+			ACharacter* Character = Cast<ACharacter>(Avatar);
+			if (Character && Character->GetMesh() && Character->GetMesh()->GetAnimInstance())
+			{
+				Character->GetMesh()->GetAnimInstance()->Montage_JumpToSection(NextSection, SingleMontage);
+			}
+		}
+		else
+		{
+			UE_LOG(LogThreadTalesCombat, Log, TEXT("[Melee GA] All combo sections in chain completed."));
 		}
 	}
 	else
 	{
 		UE_LOG(LogThreadTalesCombat, Error, TEXT("[Melee GA] ERROR: No Combo Attack Montage assigned in Weapon or Ability!"));
-		EndAbility(Handle, ActorInfo, ActivationInfo, true, false);
+		EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, false);
 	}
 }
 
@@ -144,25 +201,7 @@ void UThreadTalesGA_Melee::JumpToNextComboSection()
 	bComboWindowOpen = false;
 	bQueueNextCombo = false;
 
-	if (CurrentComboIndex < ComboSectionNames.Num())
-	{
-		FName NextSection = ComboSectionNames[CurrentComboIndex];
-
-		// Align to camera direction on each combo swing
-		AlignCharacterToCameraDirection();
-
-		UE_LOG(LogThreadTalesCombat, Display, TEXT("[Melee GA] === Transitioning to Section: %s (Strike %d) ==="), *NextSection.ToString(), CurrentComboIndex + 1);
-
-		ACharacter* Character = Cast<ACharacter>(GetAvatarActorFromActorInfo());
-		if (Character && Character->GetMesh() && Character->GetMesh()->GetAnimInstance())
-		{
-			Character->GetMesh()->GetAnimInstance()->Montage_JumpToSection(NextSection, CurrentPlayingMontage);
-		}
-	}
-	else
-	{
-		UE_LOG(LogThreadTalesCombat, Log, TEXT("[Melee GA] All combo strikes in chain completed."));
-	}
+	PlayComboStrike(CurrentComboIndex);
 }
 
 void UThreadTalesGA_Melee::AlignCharacterToCameraDirection()

@@ -15,7 +15,7 @@ void UAnimNotify_AttachWeapon::Notify(USkeletalMeshComponent* MeshComp, UAnimSeq
 {
 	Super::Notify(MeshComp, Animation, EventReference);
 
-	if (!MeshComp) return;
+	if (!MeshComp || !MeshComp->GetWorld() || !MeshComp->GetWorld()->IsGameWorld()) return;
 
 	AActor* OwnerActor = MeshComp->GetOwner();
 	if (!OwnerActor) return;
