@@ -55,6 +55,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "ThreadTales|Combat")
 	void ReleasePrimaryAttack();
 
+	/** Triggers 8-directional Evade / Dodge */
+	UFUNCTION(BlueprintCallable, Category = "ThreadTales|Combat")
+	void PerformEvade();
+
 	/** Returns true if character currently has a weapon drawn and ready for combat */
 	UFUNCTION(BlueprintPure, Category = "ThreadTales|Combat")
 	bool IsInCombatStance() const;

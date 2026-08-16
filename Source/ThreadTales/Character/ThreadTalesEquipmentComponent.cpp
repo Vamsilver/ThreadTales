@@ -2,6 +2,7 @@
 
 #include "ThreadTalesEquipmentComponent.h"
 #include "ThreadTales.h"
+#include "ThreadTalesGameplayTags.h"
 #include "ThreadTalesWeapon.h"
 #include "ThreadTalesGA_Melee.h"
 #include "ThreadTalesGA_RangedAttack.h"
@@ -241,39 +242,23 @@ void UThreadTalesEquipmentComponent::PerformPrimaryAttack()
 			}
 		}
 
-		// Otherwise, trigger the appropriate attack ability (Melee or Ranged)
-		FGameplayTag MeleeTag = FGameplayTag::RequestGameplayTag(FName("Ability.Melee"), false);
-		FGameplayTag RangedTag = FGameplayTag::RequestGameplayTag(FName("Ability.Ranged"), false);
-		FGameplayTag SlingshotTag = FGameplayTag::RequestGameplayTag(FName("Ability.Ranged.Slingshot"), false);
-
-		FGameplayTagContainer AttackTags;
-		if (MeleeTag.IsValid()) AttackTags.AddTag(MeleeTag);
-		if (RangedTag.IsValid()) AttackTags.AddTag(RangedTag);
-		if (SlingshotTag.IsValid()) AttackTags.AddTag(SlingshotTag);
-
-		UE_LOG(LogThreadTalesCombat, Display, TEXT("[Equipment] PerformPrimaryAttack trying tags: %s | ASC abilities count: %d"), *AttackTags.ToStringSimple(), ASC->GetActivatableAbilities().Num());
-		for (const FGameplayAbilitySpec& Spec : ASC->GetActivatableAbilities())
-		{
-			FString AbilityName = Spec.Ability ? Spec.Ability->GetName() : TEXT("NULL");
-			FString TagsStr = Spec.Ability ? Spec.Ability->GetAssetTags().ToStringSimple() : TEXT("None");
-			UE_LOG(LogThreadTalesCombat, Display, TEXT("   -> Ability: %s | Tags: %s | Active: %s"), *AbilityName, *TagsStr, Spec.IsActive() ? TEXT("YES") : TEXT("NO"));
-		}
-
+		// Otherwise, trigger the weapon's primary attack ability tag
+		FGameplayTag AttackTag = CurrentWeapon->GetPrimaryAttackTag();
 		bool bActivated = false;
-		if (MeleeTag.IsValid() && ASC->TryActivateAbilitiesByTag(FGameplayTagContainer(MeleeTag)))
+		if (AttackTag.IsValid())
 		{
-			bActivated = true;
+			bActivated = ASC->TryActivateAbilitiesByTag(FGameplayTagContainer(AttackTag));
 		}
-		else if (SlingshotTag.IsValid() && ASC->TryActivateAbilitiesByTag(FGameplayTagContainer(SlingshotTag)))
+		else
 		{
-			bActivated = true;
-		}
-		else if (RangedTag.IsValid() && ASC->TryActivateAbilitiesByTag(FGameplayTagContainer(RangedTag)))
-		{
-			bActivated = true;
+			// Fallback to general melee/ranged tags if not specified
+			bActivated = ASC->TryActivateAbilitiesByTag(FGameplayTagContainer(ThreadTalesGameplayTags::TAG_Ability_Melee)) ||
+			             ASC->TryActivateAbilitiesByTag(FGameplayTagContainer(ThreadTalesGameplayTags::TAG_Ability_Ranged_Slingshot)) ||
+			             ASC->TryActivateAbilitiesByTag(FGameplayTagContainer(ThreadTalesGameplayTags::TAG_Ability_Ranged));
 		}
 
-		UE_LOG(LogThreadTalesCombat, Log, TEXT("[Equipment] TryActivateAbilitiesByTag (Melee/Ranged): %s"), bActivated ? TEXT("SUCCESS") : TEXT("FAILED"));
+		UE_LOG(LogThreadTalesCombat, Log, TEXT("[Equipment] TryActivateAbilitiesByTag (Tag: %s): %s"), 
+			*AttackTag.ToString(), bActivated ? TEXT("SUCCESS") : TEXT("FAILED"));
 	}
 }
 
@@ -307,6 +292,18 @@ void UThreadTalesEquipmentComponent::ReleasePrimaryAttack()
 			}
 		}
 	}
+}
+
+void UThreadTalesEquipmentComponent::PerformEvade()
+{
+	IAbilitySystemInterface* ASI = Cast<IAbilitySystemInterface>(GetOwner());
+	if (!ASI) return;
+
+	UAbilitySystemComponent* ASC = ASI->GetAbilitySystemComponent();
+	if (!ASC) return;
+
+	bool bActivated = ASC->TryActivateAbilitiesByTag(FGameplayTagContainer(ThreadTalesGameplayTags::TAG_Ability_Evade));
+	UE_LOG(LogThreadTalesCombat, Log, TEXT("[Equipment] PerformEvade: %s"), bActivated ? TEXT("SUCCESS") : TEXT("FAILED"));
 }
 
 bool UThreadTalesEquipmentComponent::IsInCombatStance() const
