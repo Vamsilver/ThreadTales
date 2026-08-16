@@ -9,11 +9,15 @@
 
 class UThreadTalesAbilitySystemComponent;
 class UThreadTalesAttributeSet;
+class UNiagaraSystem;
+class USoundBase;
+class UAnimMontage;
 
 DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnHealthChangedDelegate, float, CurrentHealth, float, MaxHealth);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnCharacterDeathDelegate, AActor*, DeadActor, AActor*, KillerActor);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnDoubleJumpDelegate, AThreadTalesCharacter*, Character);
 
 UCLASS(config=Game)
 class THREADTALES_API AThreadTalesCharacter : public ACharacter, public IAbilitySystemInterface
@@ -69,8 +73,8 @@ protected:
 	UThreadTalesAbilitySystemComponent* AbilitySystemComponent;
 
 	// Attribute Set
-	UPROPERTY()
-	const UThreadTalesAttributeSet* AttributeSet;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Abilities", meta = (AllowPrivateAccess = "true"))
+	UThreadTalesAttributeSet* AttributeSet;
 
 	// Equipment Manager
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Equipment", meta = (AllowPrivateAccess = "true"))
@@ -89,6 +93,22 @@ public:
 	// Helper function to trigger abilities (e.g. from Input Actions)
 	UFUNCTION(BlueprintCallable, Category = "ThreadTales|Abilities")
 	void ActivateAbilityByTag(FGameplayTag ContainerTag);
+
+	/** Triggers 8-directional Evade / Dodge */
+	UFUNCTION(BlueprintCallable, Category = "ThreadTales|Combat")
+	void PerformEvade();
+
+	/** Returns true if character is currently evading / rolling */
+	UFUNCTION(BlueprintPure, Category = "ThreadTales|Combat")
+	bool IsEvading() const;
+
+	/** Default Gameplay Abilities granted to this character (configurable in Blueprints) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ThreadTales|Abilities")
+	TArray<TSubclassOf<class UGameplayAbility>> DefaultAbilities;
+
+	/** Evade ability class granted by default */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ThreadTales|Abilities")
+	TSubclassOf<class UGameplayAbility> EvadeAbilityClass;
 
 	/** Returns equipment component */
 	UFUNCTION(BlueprintPure, Category = "ThreadTales|Equipment")
@@ -121,4 +141,65 @@ public:
 	/** Toggles between Male and Female characters (can also be called via ~ console: DebugToggleGender) */
 	UFUNCTION(Exec, BlueprintCallable, Category = "ThreadTales|Debug")
 	void DebugToggleGender();
+
+	// ==========================================
+	// MOVEMENT & DOUBLE JUMP
+	// ==========================================
+
+	/** Maximum allowed consecutive jumps (1 = single jump, 2 = double jump, etc.) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Replicated, Category = "ThreadTales|Movement", meta = (ClampMin = 1, ClampMax = 5))
+	int32 MaxJumpCount;
+
+	/** Vertical velocity (jump force) for the double jump. Default is 500.0f. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ThreadTales|Movement")
+	float DoubleJumpZVelocity;
+
+	/** Optional AnimMontage to play when performing a double jump */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ThreadTales|Movement")
+	TObjectPtr<UAnimMontage> DoubleJumpMontage;
+
+	/** Optional Sound to play on double jump */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ThreadTales|Movement")
+	TObjectPtr<USoundBase> DoubleJumpSound;
+
+	/** Optional VFX/Niagara effect to spawn on double jump */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ThreadTales|Movement")
+	TObjectPtr<UNiagaraSystem> DoubleJumpEffect;
+
+	/** Event broadcasted when double jump is performed */
+	UPROPERTY(BlueprintAssignable, Category = "ThreadTales|Movement")
+	FOnDoubleJumpDelegate OnDoubleJumped;
+
+	/** Blueprint event called when double jump occurs */
+	UFUNCTION(BlueprintImplementableEvent, Category = "ThreadTales|Movement")
+	void BP_OnDoubleJump();
+
+	/** Called when a double jump is performed */
+	virtual void OnDoubleJump();
+
+	/** Returns true if character is in mid-air performing a multi/double jump */
+	UFUNCTION(BlueprintPure, Category = "ThreadTales|Movement")
+	bool IsDoubleJumping() const;
+
+	/** Flag tracking if in-air double jump has occurred during current airborne period */
+	UPROPERTY(Transient)
+	bool bHasDoubleJumpedInAir;
+
+	/** Overridden from ACharacter to trigger double jump directly when jumping in air */
+	virtual void Jump() override;
+	virtual void Landed(const FHitResult& Hit) override;
+
+	/** Overridden from ACharacter to ensure air jumps in GASP trigger OnJumped reliably */
+	virtual void CheckJumpInput(float DeltaTime) override;
+
+	/** Overridden from ACharacter to detect double jumps */
+	virtual void OnJumped_Implementation() override;
+
+	/** Sets the max jump count dynamically (e.g. power-ups) */
+	UFUNCTION(BlueprintCallable, Category = "ThreadTales|Movement")
+	void SetMaxJumpCount(int32 NewMaxJumpCount);
+
+	/** Explicitly performs double jump */
+	UFUNCTION(BlueprintCallable, Category = "ThreadTales|Movement")
+	void PerformDoubleJump();
 };

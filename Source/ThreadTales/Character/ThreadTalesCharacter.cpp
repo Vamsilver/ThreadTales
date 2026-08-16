@@ -2,13 +2,18 @@
 
 #include "ThreadTalesCharacter.h"
 #include "ThreadTales.h"
+#include "ThreadTalesGameplayTags.h"
 #include "ThreadTalesAbilitySystemComponent.h"
 #include "ThreadTalesAttributeSet.h"
 #include "ThreadTalesEquipmentComponent.h"
 #include "ThreadTalesPlayerController.h"
+#include "Abilities/ThreadTalesGA_Evade.h"
 #include "Components/CapsuleComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Net/UnrealNetwork.h"
+#include "Kismet/GameplayStatics.h"
+#include "NiagaraFunctionLibrary.h"
+#include "NiagaraSystem.h"
 
 AThreadTalesCharacter::AThreadTalesCharacter()
 {
@@ -22,6 +27,11 @@ AThreadTalesCharacter::AThreadTalesCharacter()
 
 	MaxHealth = 100.0f;
 	bIsAlive = true;
+
+	MaxJumpCount = 2;
+	JumpMaxCount = 2;
+	DoubleJumpZVelocity = 500.0f;
+	bHasDoubleJumpedInAir = false;
 
 	// Create ability system component, and set it to be explicitly replicated
 	AbilitySystemComponent = CreateDefaultSubobject<UThreadTalesAbilitySystemComponent>(TEXT("AbilitySystemComponent"));
@@ -48,6 +58,7 @@ void AThreadTalesCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
 	DOREPLIFETIME(AThreadTalesCharacter, bIsAlive);
+	DOREPLIFETIME(AThreadTalesCharacter, MaxJumpCount);
 }
 
 UAbilitySystemComponent* AThreadTalesCharacter::GetAbilitySystemComponent() const
@@ -81,17 +92,35 @@ void AThreadTalesCharacter::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// Ensure solid character collision between all pawns
-	if (GetCapsuleComponent() && bIsAlive)
-	{
-		GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
-		GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
-	}
+	// Sync max jumps count
+	JumpMaxCount = MaxJumpCount;
+
+	UE_LOG(LogThreadTales, Warning, TEXT("[Character] %s BeginPlay (MaxJumpCount=%d, DoubleJumpMontage=%s)"), 
+		*GetName(), MaxJumpCount, DoubleJumpMontage ? *DoubleJumpMontage->GetName() : TEXT("None"));
 
 	// Ensure ASC is initialized on BeginPlay
 	if (AbilitySystemComponent && (!AbilitySystemComponent->AbilityActorInfo.IsValid() || AbilitySystemComponent->AbilityActorInfo->OwnerActor == nullptr))
 	{
 		AbilitySystemComponent->InitAbilityActorInfo(this, this);
+	}
+
+	// Grant default abilities configured in Blueprint
+	if (HasAuthority() && AbilitySystemComponent)
+	{
+		for (const TSubclassOf<UGameplayAbility>& AbilityClass : DefaultAbilities)
+		{
+			if (AbilityClass)
+			{
+				FGameplayAbilitySpec Spec(AbilityClass, 1, INDEX_NONE, this);
+				AbilitySystemComponent->GiveAbility(Spec);
+			}
+		}
+
+		if (EvadeAbilityClass)
+		{
+			FGameplayAbilitySpec Spec(EvadeAbilityClass, 1, INDEX_NONE, this);
+			AbilitySystemComponent->GiveAbility(Spec);
+		}
 	}
 }
 
@@ -101,6 +130,23 @@ void AThreadTalesCharacter::ActivateAbilityByTag(FGameplayTag ContainerTag)
 	{
 		AbilitySystemComponent->TryActivateAbilitiesByTag(FGameplayTagContainer(ContainerTag));
 	}
+}
+
+void AThreadTalesCharacter::PerformEvade()
+{
+	if (EquipmentComponent)
+	{
+		EquipmentComponent->PerformEvade();
+	}
+	else if (AbilitySystemComponent)
+	{
+		AbilitySystemComponent->TryActivateAbilitiesByTag(FGameplayTagContainer(ThreadTalesGameplayTags::TAG_Ability_Evade));
+	}
+}
+
+bool AThreadTalesCharacter::IsEvading() const
+{
+	return AbilitySystemComponent && AbilitySystemComponent->HasMatchingGameplayTag(ThreadTalesGameplayTags::TAG_State_Combat_Evading);
 }
 
 float AThreadTalesCharacter::GetHealth() const
@@ -127,22 +173,18 @@ float AThreadTalesCharacter::TakeDamage(float DamageAmount, struct FDamageEvent 
 		return 0.0f;
 	}
 
+	// Check if character is evading (I-Frames)
+	if (AbilitySystemComponent && 
+		(AbilitySystemComponent->HasMatchingGameplayTag(ThreadTalesGameplayTags::TAG_State_Combat_Evading) || 
+		 AbilitySystemComponent->HasMatchingGameplayTag(ThreadTalesGameplayTags::TAG_State_Combat_Invulnerable)))
+	{
+		UE_LOG(LogThreadTalesCombat, Display, TEXT("[Character] %s EVADED incoming damage of %.1f (I-Frames Active)!"), *GetName(), DamageAmount);
+		return 0.0f;
+	}
+
 	if (HasAuthority() && AttributeSet)
 	{
-		const float OldHealth = AttributeSet->GetHealth();
-		const float NewHealth = FMath::Clamp(OldHealth - DamageAmount, 0.0f, AttributeSet->GetMaxHealth());
-
-		const_cast<UThreadTalesAttributeSet*>(AttributeSet)->SetHealth(NewHealth);
-
-		UE_LOG(LogThreadTalesCombat, Display, TEXT("[AttributeSet] %s took %.1f damage. Remaining Health: %.1f / %.1f"),
-			*GetName(), DamageAmount, NewHealth, AttributeSet->GetMaxHealth());
-
-		HandleHealthChanged(NewHealth, AttributeSet->GetMaxHealth());
-
-		if (NewHealth <= 0.0f)
-		{
-			Die(DamageCauser);
-		}
+		AttributeSet->ReceiveDamage(DamageAmount, DamageCauser);
 	}
 
 	return ActualDamage;
@@ -299,3 +341,120 @@ void AThreadTalesCharacter::DebugToggleGender()
 		DebugSwitchToMale();
 	}
 }
+
+void AThreadTalesCharacter::SetMaxJumpCount(int32 NewMaxJumpCount)
+{
+	MaxJumpCount = FMath::Max(1, NewMaxJumpCount);
+	JumpMaxCount = MaxJumpCount;
+}
+
+bool AThreadTalesCharacter::IsDoubleJumping() const
+{
+	return JumpCurrentCount > 1;
+}
+
+void AThreadTalesCharacter::Jump()
+{
+	if (GetCharacterMovement() && GetCharacterMovement()->IsFalling() && !bHasDoubleJumpedInAir)
+	{
+		bHasDoubleJumpedInAir = true;
+		UE_LOG(LogThreadTales, Warning, TEXT("[DoubleJump] %s Jump() in air -> Triggering OnDoubleJump!"), *GetName());
+		OnDoubleJump();
+	}
+
+	Super::Jump();
+}
+
+void AThreadTalesCharacter::Landed(const FHitResult& Hit)
+{
+	Super::Landed(Hit);
+
+	bHasDoubleJumpedInAir = false;
+}
+
+void AThreadTalesCharacter::CheckJumpInput(float DeltaTime)
+{
+	// In GASP / Enhanced Input: when jump is pressed in the air, ensure jump transition state is ready for the air jump
+	if (bPressedJump && GetCharacterMovement() && GetCharacterMovement()->IsFalling() && JumpCurrentCount > 0)
+	{
+		bWasJumping = false;
+	}
+
+	Super::CheckJumpInput(DeltaTime);
+}
+
+void AThreadTalesCharacter::OnJumped_Implementation()
+{
+	Super::OnJumped_Implementation();
+
+	const bool bIsFalling = GetCharacterMovement() && GetCharacterMovement()->IsFalling();
+	UE_LOG(LogThreadTales, Warning, TEXT("[Jump] %s OnJumped: JumpCurrentCount = %d / %d (IsFalling = %s)"), 
+		*GetName(), JumpCurrentCount, JumpMaxCount, bIsFalling ? TEXT("true") : TEXT("false"));
+
+	if (JumpCurrentCount > 1 && !bHasDoubleJumpedInAir)
+	{
+		bHasDoubleJumpedInAir = true;
+		OnDoubleJump();
+	}
+}
+
+void AThreadTalesCharacter::OnDoubleJump()
+{
+	// 1. Try activating Double Jump via GAS (Ability.Movement.DoubleJump)
+	bool bActivatedViaGAS = false;
+	if (AbilitySystemComponent)
+	{
+		bActivatedViaGAS = AbilitySystemComponent->TryActivateAbilitiesByTag(FGameplayTagContainer(ThreadTalesGameplayTags::TAG_Ability_Movement_DoubleJump));
+	}
+
+	// 2. Fallback: if not handled via GAS, execute character's default movement / montage logic
+	if (!bActivatedViaGAS)
+	{
+		if (DoubleJumpZVelocity > 0.0f && GetCharacterMovement())
+		{
+			FVector CurrentVelocity = GetCharacterMovement()->Velocity;
+			CurrentVelocity.Z = DoubleJumpZVelocity;
+			GetCharacterMovement()->Velocity = CurrentVelocity;
+			UE_LOG(LogThreadTales, Display, TEXT("[DoubleJump] Applied DoubleJumpZVelocity = %.1f"), DoubleJumpZVelocity);
+		}
+
+		if (DoubleJumpMontage)
+		{
+			UAnimInstance* AnimInst = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
+			const float MontageDuration = PlayAnimMontage(DoubleJumpMontage);
+			UE_LOG(LogThreadTales, Warning, TEXT("[DoubleJump] %s DoubleJumpMontage '%s' -> PlayAnimMontage result: %.2f sec (AnimInstance: %s, Mesh: %s)"), 
+				*GetName(), 
+				*DoubleJumpMontage->GetName(), 
+				MontageDuration, 
+				AnimInst ? *AnimInst->GetClass()->GetName() : TEXT("NULL"),
+				GetMesh() ? *GetMesh()->GetName() : TEXT("NULL"));
+		}
+		else
+		{
+			UE_LOG(LogThreadTales, Warning, TEXT("[DoubleJump] %s has NO DoubleJumpMontage assigned!"), *GetName());
+		}
+
+		if (DoubleJumpSound)
+		{
+			UGameplayStatics::PlaySoundAtLocation(this, DoubleJumpSound, GetActorLocation());
+		}
+
+		if (DoubleJumpEffect)
+		{
+			const float CapsuleHalfHeight = GetCapsuleComponent() ? GetCapsuleComponent()->GetScaledCapsuleHalfHeight() : 0.f;
+			UNiagaraFunctionLibrary::SpawnSystemAtLocation(GetWorld(), DoubleJumpEffect, GetActorLocation() - FVector(0.f, 0.f, CapsuleHalfHeight));
+		}
+	}
+
+	OnDoubleJumped.Broadcast(this);
+	BP_OnDoubleJump();
+}
+
+void AThreadTalesCharacter::PerformDoubleJump()
+{
+	if (CanJump())
+	{
+		Jump();
+	}
+}
+
