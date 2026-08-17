@@ -102,6 +102,10 @@
 		{
 			"Name": "RemoteControl",
 			"Enabled": true
+		},
+		{
+			"Name": "MCPUnreal",
+			"Enabled": true
 		}
 	]
-}
+}
