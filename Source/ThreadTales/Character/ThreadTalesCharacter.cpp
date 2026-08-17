@@ -123,6 +123,11 @@ void AThreadTalesCharacter::BeginPlay()
 			FGameplayAbilitySpec Spec(EvadeAbilityClass, 1, INDEX_NONE, this);
 			AbilitySystemComponent->GiveAbility(Spec);
 		}
+
+		if (EquipmentComponent && DefaultWeaponClass)
+		{
+			EquipmentComponent->EquipWeapon(DefaultWeaponClass);
+		}
 	}
 }
 
@@ -200,6 +205,11 @@ void AThreadTalesCharacter::ToggleCombatStance()
 	{
 		EquipmentComponent->ToggleCombatStance();
 	}
+}
+
+bool AThreadTalesCharacter::IsInCombatStance() const
+{
+	return EquipmentComponent && EquipmentComponent->IsInCombatStance();
 }
 
 bool AThreadTalesCharacter::IsEvading() const
@@ -476,16 +486,56 @@ void AThreadTalesCharacter::OnDoubleJump()
 			UE_LOG(LogThreadTales, Display, TEXT("[DoubleJump] Applied DoubleJumpZVelocity = %.1f"), DoubleJumpZVelocity);
 		}
 
-		if (DoubleJumpMontage)
+		UAnimMontage* MontageToPlay = DoubleJumpMontage ? DoubleJumpMontage.Get() : nullptr;
+
+		// Check movement input direction
+		FVector InputVector = GetLastMovementInputVector();
+		if (InputVector.IsNearlyZero() && GetCharacterMovement())
+		{
+			InputVector = GetCharacterMovement()->GetCurrentAcceleration().GetSafeNormal();
+		}
+
+		if (InputVector.IsNearlyZero())
+		{
+			if (DoubleJumpNeutralMontage) MontageToPlay = DoubleJumpNeutralMontage.Get();
+		}
+		else
+		{
+			AController* C = GetController();
+			FRotator CamRot = C ? C->GetControlRotation() : GetActorRotation();
+			FRotator InputRot = InputVector.Rotation();
+			FRotator DeltaRot = (InputRot - CamRot).GetNormalized();
+			float Angle = DeltaRot.Yaw;
+
+			if (Angle >= -45.0f && Angle < 45.0f)
+			{
+				if (DoubleJumpForwardMontage) MontageToPlay = DoubleJumpForwardMontage.Get();
+			}
+			else if (Angle >= 45.0f && Angle < 135.0f)
+			{
+				if (DoubleJumpRightMontage) MontageToPlay = DoubleJumpRightMontage.Get();
+			}
+			else if (Angle >= -135.0f && Angle < -45.0f)
+			{
+				if (DoubleJumpLeftMontage) MontageToPlay = DoubleJumpLeftMontage.Get();
+			}
+			else
+			{
+				if (DoubleJumpBackwardMontage) MontageToPlay = DoubleJumpBackwardMontage.Get();
+			}
+
+			if (C)
+			{
+				SetActorRotation(FRotator(0.0f, C->GetControlRotation().Yaw, 0.0f));
+			}
+		}
+
+		if (MontageToPlay)
 		{
 			UAnimInstance* AnimInst = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
-			const float MontageDuration = PlayAnimMontage(DoubleJumpMontage);
-			UE_LOG(LogThreadTales, Warning, TEXT("[DoubleJump] %s DoubleJumpMontage '%s' -> PlayAnimMontage result: %.2f sec (AnimInstance: %s, Mesh: %s)"), 
-				*GetName(), 
-				*DoubleJumpMontage->GetName(), 
-				MontageDuration, 
-				AnimInst ? *AnimInst->GetClass()->GetName() : TEXT("NULL"),
-				GetMesh() ? *GetMesh()->GetName() : TEXT("NULL"));
+			const float MontageDuration = PlayAnimMontage(MontageToPlay);
+			UE_LOG(LogThreadTales, Display, TEXT("[DoubleJump] %s DoubleJump Montage '%s' -> PlayAnimMontage result: %.2f sec"), 
+				*GetName(), *MontageToPlay->GetName(), MontageDuration);
 		}
 		else
 		{

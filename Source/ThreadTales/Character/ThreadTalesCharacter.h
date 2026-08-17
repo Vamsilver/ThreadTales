@@ -120,6 +120,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "ThreadTales|Combat")
 	bool IsEvading() const;
 
+	/** Returns true if character currently has weapon drawn in combat stance */
+	UFUNCTION(BlueprintPure, Category = "ThreadTales|Combat")
+	bool IsInCombatStance() const;
+
 	/** Default Gameplay Abilities granted to this character (configurable in Blueprints) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ThreadTales|Abilities")
 	TArray<TSubclassOf<class UGameplayAbility>> DefaultAbilities;
@@ -127,6 +131,10 @@ public:
 	/** Evade ability class granted by default */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ThreadTales|Abilities")
 	TSubclassOf<class UGameplayAbility> EvadeAbilityClass;
+
+	/** Default weapon class equipped on spawn */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ThreadTales|Equipment")
+	TSubclassOf<class AThreadTalesWeapon> DefaultWeaponClass;
 
 	/** Returns equipment component */
 	UFUNCTION(BlueprintPure, Category = "ThreadTales|Equipment")
@@ -172,9 +180,29 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ThreadTales|Movement")
 	float DoubleJumpZVelocity;
 
-	/** Optional AnimMontage to play when performing a double jump */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ThreadTales|Movement")
+	/** Optional AnimMontage to play when performing a double jump (fallback / default) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ThreadTales|Movement|Montages")
 	TObjectPtr<UAnimMontage> DoubleJumpMontage;
+
+	/** Neutral / In-Place double jump montage (when no WASD input) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ThreadTales|Movement|Montages")
+	TObjectPtr<UAnimMontage> DoubleJumpNeutralMontage;
+
+	/** Forward double jump montage (W) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ThreadTales|Movement|Montages")
+	TObjectPtr<UAnimMontage> DoubleJumpForwardMontage;
+
+	/** Backward double jump montage (S) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ThreadTales|Movement|Montages")
+	TObjectPtr<UAnimMontage> DoubleJumpBackwardMontage;
+
+	/** Left double jump montage (A) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ThreadTales|Movement|Montages")
+	TObjectPtr<UAnimMontage> DoubleJumpLeftMontage;
+
+	/** Right double jump montage (D) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ThreadTales|Movement|Montages")
+	TObjectPtr<UAnimMontage> DoubleJumpRightMontage;
 
 	/** Optional Sound to play on double jump */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ThreadTales|Movement")

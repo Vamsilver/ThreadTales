@@ -7,13 +7,15 @@
 #include "Abilities/Tasks/AbilityTask_PlayMontageAndWait.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "GameFramework/PlayerController.h"
 #include "Components/CapsuleComponent.h"
 #include "Kismet/GameplayStatics.h"
+#include "Kismet/KismetMathLibrary.h"
 #include "NiagaraFunctionLibrary.h"
 
 UThreadTalesGA_DoubleJump::UThreadTalesGA_DoubleJump()
 {
-	AbilityName = TEXT("Double Jump");
+	AbilityName = TEXT("Directional Double Jump");
 	NetExecutionPolicy = EGameplayAbilityNetExecutionPolicy::LocalPredicted;
 	InstancingPolicy = EGameplayAbilityInstancingPolicy::InstancedPerActor;
 
@@ -21,6 +23,100 @@ UThreadTalesGA_DoubleJump::UThreadTalesGA_DoubleJump()
 
 	SetAssetTags(FGameplayTagContainer(ThreadTalesGameplayTags::TAG_Ability_Movement_DoubleJump));
 	ActivationOwnedTags.AddTag(ThreadTalesGameplayTags::TAG_State_Movement_DoubleJumping);
+}
+
+EDoubleJumpDirection UThreadTalesGA_DoubleJump::CalculateDoubleJumpDirection(float& OutAngle) const
+{
+	ACharacter* Character = Cast<ACharacter>(GetAvatarActorFromActorInfo());
+	if (!Character)
+	{
+		OutAngle = 0.0f;
+		return EDoubleJumpDirection::Neutral;
+	}
+
+	FVector InputVector = Character->GetLastMovementInputVector();
+	if (InputVector.IsNearlyZero() && Character->GetCharacterMovement())
+	{
+		InputVector = Character->GetCharacterMovement()->GetCurrentAcceleration().GetSafeNormal();
+	}
+
+	// If no movement input is pressed, return Neutral (in-place jump)
+	if (InputVector.IsNearlyZero())
+	{
+		OutAngle = 0.0f;
+		return EDoubleJumpDirection::Neutral;
+	}
+
+	AController* Controller = Character->GetController();
+	FRotator CameraRotation = Controller ? Controller->GetControlRotation() : Character->GetActorRotation();
+
+	// Calculate angle between Movement Input and Camera Heading (-180..+180)
+	FRotator InputRot = InputVector.Rotation();
+	FRotator DeltaRot = UKismetMathLibrary::NormalizedDeltaRotator(InputRot, CameraRotation);
+	float Angle = DeltaRot.Yaw;
+	OutAngle = Angle;
+
+	if (Angle >= -45.0f && Angle < 45.0f)
+	{
+		return EDoubleJumpDirection::Forward;
+	}
+	else if (Angle >= 45.0f && Angle < 135.0f)
+	{
+		return EDoubleJumpDirection::Right;
+	}
+	else if (Angle >= -135.0f && Angle < -45.0f)
+	{
+		return EDoubleJumpDirection::Left;
+	}
+	else
+	{
+		return EDoubleJumpDirection::Backward;
+	}
+}
+
+UAnimMontage* UThreadTalesGA_DoubleJump::GetMontageForDirection(EDoubleJumpDirection Direction) const
+{
+	AThreadTalesCharacter* TTChar = Cast<AThreadTalesCharacter>(GetAvatarActorFromActorInfo());
+
+	auto GetEffectiveMontage = [](const TObjectPtr<UAnimMontage>& AbilityMontage, const TObjectPtr<UAnimMontage>& CharacterMontage) -> UAnimMontage*
+	{
+		if (AbilityMontage) return AbilityMontage.Get();
+		if (CharacterMontage) return CharacterMontage.Get();
+		return nullptr;
+	};
+
+	UAnimMontage* FallbackMontage = GetEffectiveMontage(DoubleJumpMontage, TTChar ? TTChar->DoubleJumpMontage : nullptr);
+
+	switch (Direction)
+	{
+	case EDoubleJumpDirection::Neutral:
+	{
+		UAnimMontage* M = GetEffectiveMontage(DoubleJumpNeutralMontage, TTChar ? TTChar->DoubleJumpNeutralMontage : nullptr);
+		return M ? M : FallbackMontage;
+	}
+	case EDoubleJumpDirection::Forward:
+	{
+		UAnimMontage* M = GetEffectiveMontage(DoubleJumpForwardMontage, TTChar ? TTChar->DoubleJumpForwardMontage : nullptr);
+		return M ? M : FallbackMontage;
+	}
+	case EDoubleJumpDirection::Backward:
+	{
+		UAnimMontage* M = GetEffectiveMontage(DoubleJumpBackwardMontage, TTChar ? TTChar->DoubleJumpBackwardMontage : nullptr);
+		return M ? M : FallbackMontage;
+	}
+	case EDoubleJumpDirection::Left:
+	{
+		UAnimMontage* M = GetEffectiveMontage(DoubleJumpLeftMontage, TTChar ? TTChar->DoubleJumpLeftMontage : nullptr);
+		return M ? M : FallbackMontage;
+	}
+	case EDoubleJumpDirection::Right:
+	{
+		UAnimMontage* M = GetEffectiveMontage(DoubleJumpRightMontage, TTChar ? TTChar->DoubleJumpRightMontage : nullptr);
+		return M ? M : FallbackMontage;
+	}
+	default:
+		return FallbackMontage;
+	}
 }
 
 void UThreadTalesGA_DoubleJump::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData)
@@ -42,8 +138,10 @@ void UThreadTalesGA_DoubleJump::ActivateAbility(const FGameplayAbilitySpecHandle
 
 	AThreadTalesCharacter* TTChar = Cast<AThreadTalesCharacter>(Character);
 
-	// Get montage, sound, VFX, and velocity from this ability, or fall back to character settings
-	UAnimMontage* MontageToPlay = DoubleJumpMontage ? DoubleJumpMontage.Get() : (TTChar ? TTChar->DoubleJumpMontage.Get() : nullptr);
+	float Angle = 0.0f;
+	EDoubleJumpDirection Direction = CalculateDoubleJumpDirection(Angle);
+	UAnimMontage* MontageToPlay = GetMontageForDirection(Direction);
+
 	USoundBase* SoundToPlay = DoubleJumpSound ? DoubleJumpSound.Get() : (TTChar ? TTChar->DoubleJumpSound.Get() : nullptr);
 	UNiagaraSystem* EffectToPlay = DoubleJumpEffect ? DoubleJumpEffect.Get() : (TTChar ? TTChar->DoubleJumpEffect.Get() : nullptr);
 	
@@ -53,7 +151,23 @@ void UThreadTalesGA_DoubleJump::ActivateAbility(const FGameplayAbilitySpecHandle
 		EffectiveZVelocity = TTChar->DoubleJumpZVelocity;
 	}
 
-	// Apply vertical jump velocity
+	// Lock CMC auto-rotation to movement so character orientation is not twisted mid-air during the flip
+	if (UCharacterMovementComponent* CMC = Character->GetCharacterMovement())
+	{
+		bSavedOrientRotationToMovement = CMC->bOrientRotationToMovement;
+		bSavedUseControllerDesiredRotation = CMC->bUseControllerDesiredRotation;
+		CMC->bOrientRotationToMovement = false;
+		CMC->bUseControllerDesiredRotation = false;
+	}
+
+	// Align character rotation to camera view for directional jumps
+	AController* Controller = Character->GetController();
+	if (Controller && Direction != EDoubleJumpDirection::Neutral)
+	{
+		Character->SetActorRotation(FRotator(0.0f, Controller->GetControlRotation().Yaw, 0.0f));
+	}
+
+	// Apply vertical jump impulse
 	if (UCharacterMovementComponent* CMC = Character->GetCharacterMovement())
 	{
 		FVector CurrentVelocity = CMC->Velocity;
@@ -74,8 +188,8 @@ void UThreadTalesGA_DoubleJump::ActivateAbility(const FGameplayAbilitySpecHandle
 		UNiagaraFunctionLibrary::SpawnSystemAtLocation(Character->GetWorld(), EffectToPlay, Character->GetActorLocation() - FVector(0.0f, 0.0f, CapsuleHalfHeight));
 	}
 
-	UE_LOG(LogThreadTales, Display, TEXT("[DoubleJump GA] %s activated Double Jump (Velocity.Z: %.1f, Montage: %s)"),
-		*Character->GetName(), EffectiveZVelocity, *GetNameSafe(MontageToPlay));
+	UE_LOG(LogThreadTales, Display, TEXT("[DoubleJump GA] %s activated Double Jump in direction %d (Angle: %.1f deg, Velocity.Z: %.1f, Montage: %s)"),
+		*Character->GetName(), static_cast<int32>(Direction), Angle, EffectiveZVelocity, *GetNameSafe(MontageToPlay));
 
 	// Play montage if assigned
 	if (MontageToPlay)
@@ -100,6 +214,21 @@ void UThreadTalesGA_DoubleJump::ActivateAbility(const FGameplayAbilitySpecHandle
 	}
 }
 
+void UThreadTalesGA_DoubleJump::EndAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, bool bReplicateEndAbility, bool bWasCancelled)
+{
+	// Restore CMC rotation settings
+	if (ACharacter* Character = Cast<ACharacter>(GetAvatarActorFromActorInfo()))
+	{
+		if (UCharacterMovementComponent* CMC = Character->GetCharacterMovement())
+		{
+			CMC->bOrientRotationToMovement = bSavedOrientRotationToMovement;
+			CMC->bUseControllerDesiredRotation = bSavedUseControllerDesiredRotation;
+		}
+	}
+
+	Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
+}
+
 void UThreadTalesGA_DoubleJump::OnMontageCompleted()
 {
 	EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, false);
@@ -114,3 +243,5 @@ void UThreadTalesGA_DoubleJump::OnMontageCancelled()
 {
 	EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, true);
 }
+
+
