@@ -30,6 +30,7 @@ public class ThreadTales : ModuleRules
 		PublicIncludePaths.AddRange(new string[] {
 			"ThreadTales",
 			"ThreadTales/Character",
+			"ThreadTales/Input",
 			"ThreadTales/Weapons",
 			"ThreadTales/Abilities",
 			"ThreadTales/Animation",
