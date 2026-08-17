@@ -39,13 +39,22 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "ThreadTales|Combat")
 	void ToggleCombatStance();
 
+	UFUNCTION(Server, Reliable)
+	void ServerToggleCombatStance();
+
 	/** Draws the weapon from sheath into hand */
 	UFUNCTION(BlueprintCallable, Category = "ThreadTales|Combat")
 	void DrawWeapon();
 
+	UFUNCTION(Server, Reliable)
+	void ServerDrawWeapon();
+
 	/** Returns the weapon from hand back to sheath */
 	UFUNCTION(BlueprintCallable, Category = "ThreadTales|Combat")
 	void SheathWeapon();
+
+	UFUNCTION(Server, Reliable)
+	void ServerSheathWeapon();
 
 	/** Triggers weapon primary attack or queues the next combo strike if already attacking */
 	UFUNCTION(BlueprintCallable, Category = "ThreadTales|Combat")

@@ -51,6 +51,13 @@ void UThreadTalesGA_Melee::ActivateAbility(const FGameplayAbilitySpecHandle Hand
 	PlayComboStrike(0);
 }
 
+void UThreadTalesGA_Melee::InputPressed(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo)
+{
+	Super::InputPressed(Handle, ActorInfo, ActivationInfo);
+
+	NotifyComboInput();
+}
+
 void UThreadTalesGA_Melee::PlayComboStrike(int32 Index)
 {
 	// Orient character towards camera or movement direction

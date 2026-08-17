@@ -5,6 +5,7 @@
 #include "ThreadTalesGameplayTags.h"
 #include "Weapons/ThreadTalesWeapon_Slingshot.h"
 #include "Character/ThreadTalesEquipmentComponent.h"
+#include "Abilities/Tasks/AbilityTask_WaitInputRelease.h"
 #include "Components/ArrowComponent.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/PlayerController.h"
@@ -27,6 +28,7 @@ UThreadTalesGA_RangedAttack::UThreadTalesGA_RangedAttack()
 	bIsCharging = false;
 	ChargeStartTime = 0.0f;
 	ActiveSlingshot = nullptr;
+	WaitInputReleaseTask = nullptr;
 }
 
 void UThreadTalesGA_RangedAttack::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData)
@@ -85,7 +87,20 @@ void UThreadTalesGA_RangedAttack::ActivateAbility(const FGameplayAbilitySpecHand
 		Character->PlayAnimMontage(ActiveSlingshot->AimMontage);
 	}
 
+	// Setup GAS WaitInputRelease task to automatically trigger release when player lets go of input
+	WaitInputReleaseTask = UAbilityTask_WaitInputRelease::WaitInputRelease(this, true);
+	if (WaitInputReleaseTask)
+	{
+		WaitInputReleaseTask->OnRelease.AddDynamic(this, &UThreadTalesGA_RangedAttack::OnInputReleasedCallback);
+		WaitInputReleaseTask->ReadyForActivation();
+	}
+
 	UE_LOG(LogThreadTalesCombat, Display, TEXT("[GA_RangedAttack] Slingshot Aim & Charge started!"));
+}
+
+void UThreadTalesGA_RangedAttack::OnInputReleasedCallback(float TimeHeld)
+{
+	ReleaseAndFire();
 }
 
 void UThreadTalesGA_RangedAttack::InputReleased(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo)
@@ -174,6 +189,12 @@ void UThreadTalesGA_RangedAttack::EndAbility(const FGameplayAbilitySpecHandle Ha
 {
 	bIsCharging = false;
 	ActiveSlingshot = nullptr;
+
+	if (WaitInputReleaseTask)
+	{
+		WaitInputReleaseTask->EndTask();
+		WaitInputReleaseTask = nullptr;
+	}
 
 	Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
 }

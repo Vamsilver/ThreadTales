@@ -7,9 +7,11 @@
 #include "ThreadTalesGA_RangedAttack.generated.h"
 
 class AThreadTalesWeapon_Slingshot;
+class UAbilityTask_WaitInputRelease;
 
 /**
  * Gameplay Ability for Ranged Weapon Attacks (Slingshot Charge & Release).
+ * Uses standard GAS WaitInputRelease task to handle charge and release mechanics.
  */
 UCLASS()
 class THREADTALES_API UThreadTalesGA_RangedAttack : public UThreadTalesGameplayAbility
@@ -34,6 +36,12 @@ public:
 protected:
 	UPROPERTY(Transient)
 	AThreadTalesWeapon_Slingshot* ActiveSlingshot;
+
+	UPROPERTY()
+	UAbilityTask_WaitInputRelease* WaitInputReleaseTask;
+
+	UFUNCTION()
+	void OnInputReleasedCallback(float TimeHeld);
 
 	float ChargeStartTime;
 	bool bIsCharging;

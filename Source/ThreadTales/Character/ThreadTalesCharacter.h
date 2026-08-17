@@ -9,6 +9,7 @@
 
 class UThreadTalesAbilitySystemComponent;
 class UThreadTalesAttributeSet;
+class UThreadTalesInputConfig;
 class UNiagaraSystem;
 class USoundBase;
 class UAnimMontage;
@@ -87,6 +88,19 @@ protected:
 	UFUNCTION()
 	virtual void OnRep_IsAlive();
 
+	/** Input configuration data asset mapping Input Actions to Gameplay Tags */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ThreadTales|Input")
+	TObjectPtr<const UThreadTalesInputConfig> InputConfig;
+
+	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
+
+	/** Handlers for ability inputs mapped via Input Tags */
+	void Input_AbilityInputTagPressed(FGameplayTag InputTag);
+	void Input_AbilityInputTagReleased(FGameplayTag InputTag);
+
+	/** Handles for dynamic ability input bindings */
+	TArray<uint32> AbilityBindHandles;
+
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 public:
@@ -97,6 +111,10 @@ public:
 	/** Triggers 8-directional Evade / Dodge */
 	UFUNCTION(BlueprintCallable, Category = "ThreadTales|Combat")
 	void PerformEvade();
+
+	/** Toggles weapon combat stance (Draw / Sheath) */
+	UFUNCTION(BlueprintCallable, Category = "ThreadTales|Combat")
+	void ToggleCombatStance();
 
 	/** Returns true if character is currently evading / rolling */
 	UFUNCTION(BlueprintPure, Category = "ThreadTales|Combat")

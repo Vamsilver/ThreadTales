@@ -1,8 +1,7 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
-
 #include "ThreadTalesEquipmentComponent.h"
 #include "ThreadTales.h"
 #include "ThreadTalesGameplayTags.h"
+#include "ThreadTalesAbilitySystemComponent.h"
 #include "ThreadTalesWeapon.h"
 #include "ThreadTalesGA_Melee.h"
 #include "ThreadTalesGA_RangedAttack.h"
@@ -88,6 +87,12 @@ void UThreadTalesEquipmentComponent::ServerUnequipWeapon_Implementation()
 
 void UThreadTalesEquipmentComponent::ToggleCombatStance()
 {
+	if (!GetOwner()->HasAuthority())
+	{
+		ServerToggleCombatStance();
+		return;
+	}
+
 	if (!CurrentWeapon) return;
 
 	if (CurrentWeapon->IsSheathed())
@@ -100,8 +105,19 @@ void UThreadTalesEquipmentComponent::ToggleCombatStance()
 	}
 }
 
+void UThreadTalesEquipmentComponent::ServerToggleCombatStance_Implementation()
+{
+	ToggleCombatStance();
+}
+
 void UThreadTalesEquipmentComponent::DrawWeapon()
 {
+	if (!GetOwner()->HasAuthority())
+	{
+		ServerDrawWeapon();
+		return;
+	}
+
 	if (!CurrentWeapon || !CurrentWeapon->IsSheathed()) return;
 
 	ACharacter* Character = Cast<ACharacter>(GetOwner());
@@ -130,11 +146,30 @@ void UThreadTalesEquipmentComponent::DrawWeapon()
 		CurrentWeapon->AttachToHand();
 	}
 
+	if (IAbilitySystemInterface* ASI = Cast<IAbilitySystemInterface>(GetOwner()))
+	{
+		if (UAbilitySystemComponent* ASC = ASI->GetAbilitySystemComponent())
+		{
+			ASC->AddLooseGameplayTag(ThreadTalesGameplayTags::TAG_State_Combat_InCombat);
+		}
+	}
+
 	OnCombatStanceChanged.Broadcast(true);
+}
+
+void UThreadTalesEquipmentComponent::ServerDrawWeapon_Implementation()
+{
+	DrawWeapon();
 }
 
 void UThreadTalesEquipmentComponent::SheathWeapon()
 {
+	if (!GetOwner()->HasAuthority())
+	{
+		ServerSheathWeapon();
+		return;
+	}
+
 	if (!CurrentWeapon || !CurrentWeapon->IsDrawn()) return;
 
 	ACharacter* Character = Cast<ACharacter>(GetOwner());
@@ -163,7 +198,20 @@ void UThreadTalesEquipmentComponent::SheathWeapon()
 		CurrentWeapon->AttachToSheath();
 	}
 
+	if (IAbilitySystemInterface* ASI = Cast<IAbilitySystemInterface>(GetOwner()))
+	{
+		if (UAbilitySystemComponent* ASC = ASI->GetAbilitySystemComponent())
+		{
+			ASC->RemoveLooseGameplayTag(ThreadTalesGameplayTags::TAG_State_Combat_InCombat);
+		}
+	}
+
 	OnCombatStanceChanged.Broadcast(false);
+}
+
+void UThreadTalesEquipmentComponent::ServerSheathWeapon_Implementation()
+{
+	SheathWeapon();
 }
 
 void UThreadTalesEquipmentComponent::SetMovementInputBlocked(bool bBlocked)
@@ -202,108 +250,35 @@ void UThreadTalesEquipmentComponent::PerformPrimaryAttack()
 		return;
 	}
 
-	if (CurrentWeapon->IsDrawn())
+	if (IAbilitySystemInterface* ASI = Cast<IAbilitySystemInterface>(GetOwner()))
 	{
-		IAbilitySystemInterface* ASI = Cast<IAbilitySystemInterface>(GetOwner());
-		if (!ASI)
+		if (UThreadTalesAbilitySystemComponent* ASC = Cast<UThreadTalesAbilitySystemComponent>(ASI->GetAbilitySystemComponent()))
 		{
-			UE_LOG(LogThreadTalesCombat, Error, TEXT("[Equipment] Owner does NOT implement IAbilitySystemInterface!"));
-			return;
+			ASC->AbilityInputTagPressed(ThreadTalesGameplayTags::TAG_Input_Ability_Melee);
 		}
-
-		UAbilitySystemComponent* ASC = ASI->GetAbilitySystemComponent();
-		if (!ASC)
-		{
-			UE_LOG(LogThreadTalesCombat, Error, TEXT("[Equipment] Owner has null AbilitySystemComponent!"));
-			return;
-		}
-
-		// Check if a Melee combo ability is currently running
-		for (const FGameplayAbilitySpec& Spec : ASC->GetActivatableAbilities())
-		{
-			if (Spec.IsActive())
-			{
-				if (UThreadTalesGA_Melee* MeleeAbility = Cast<UThreadTalesGA_Melee>(Spec.GetPrimaryInstance()))
-				{
-					UE_LOG(LogThreadTalesCombat, Log, TEXT("[Equipment] Buffered Attack into active Melee Ability (PrimaryInstance)!"));
-					MeleeAbility->NotifyComboInput();
-					return;
-				}
-
-				for (UGameplayAbility* Inst : Spec.GetAbilityInstances())
-				{
-					if (UThreadTalesGA_Melee* MeleeAbility = Cast<UThreadTalesGA_Melee>(Inst))
-					{
-						UE_LOG(LogThreadTalesCombat, Log, TEXT("[Equipment] Buffered Attack into active Melee Ability (AbilityInstance)!"));
-						MeleeAbility->NotifyComboInput();
-						return;
-					}
-				}
-			}
-		}
-
-		// Otherwise, trigger the weapon's primary attack ability tag
-		FGameplayTag AttackTag = CurrentWeapon->GetPrimaryAttackTag();
-		bool bActivated = false;
-		if (AttackTag.IsValid())
-		{
-			bActivated = ASC->TryActivateAbilitiesByTag(FGameplayTagContainer(AttackTag));
-		}
-		else
-		{
-			// Fallback to general melee/ranged tags if not specified
-			bActivated = ASC->TryActivateAbilitiesByTag(FGameplayTagContainer(ThreadTalesGameplayTags::TAG_Ability_Melee)) ||
-			             ASC->TryActivateAbilitiesByTag(FGameplayTagContainer(ThreadTalesGameplayTags::TAG_Ability_Ranged_Slingshot)) ||
-			             ASC->TryActivateAbilitiesByTag(FGameplayTagContainer(ThreadTalesGameplayTags::TAG_Ability_Ranged));
-		}
-
-		UE_LOG(LogThreadTalesCombat, Log, TEXT("[Equipment] TryActivateAbilitiesByTag (Tag: %s): %s"), 
-			*AttackTag.ToString(), bActivated ? TEXT("SUCCESS") : TEXT("FAILED"));
 	}
 }
 
 void UThreadTalesEquipmentComponent::ReleasePrimaryAttack()
 {
-	if (!CurrentWeapon) return;
-
-	IAbilitySystemInterface* ASI = Cast<IAbilitySystemInterface>(GetOwner());
-	if (!ASI) return;
-
-	UAbilitySystemComponent* ASC = ASI->GetAbilitySystemComponent();
-	if (!ASC) return;
-
-	for (const FGameplayAbilitySpec& Spec : ASC->GetActivatableAbilities())
+	if (IAbilitySystemInterface* ASI = Cast<IAbilitySystemInterface>(GetOwner()))
 	{
-		if (Spec.IsActive())
+		if (UThreadTalesAbilitySystemComponent* ASC = Cast<UThreadTalesAbilitySystemComponent>(ASI->GetAbilitySystemComponent()))
 		{
-			if (UThreadTalesGA_RangedAttack* RangedAbility = Cast<UThreadTalesGA_RangedAttack>(Spec.GetPrimaryInstance()))
-			{
-				RangedAbility->ReleaseAndFire();
-				return;
-			}
-
-			for (UGameplayAbility* Inst : Spec.GetAbilityInstances())
-			{
-				if (UThreadTalesGA_RangedAttack* RangedAbility = Cast<UThreadTalesGA_RangedAttack>(Inst))
-				{
-					RangedAbility->ReleaseAndFire();
-					return;
-				}
-			}
+			ASC->AbilityInputTagReleased(ThreadTalesGameplayTags::TAG_Input_Ability_Ranged);
 		}
 	}
 }
 
 void UThreadTalesEquipmentComponent::PerformEvade()
 {
-	IAbilitySystemInterface* ASI = Cast<IAbilitySystemInterface>(GetOwner());
-	if (!ASI) return;
-
-	UAbilitySystemComponent* ASC = ASI->GetAbilitySystemComponent();
-	if (!ASC) return;
-
-	bool bActivated = ASC->TryActivateAbilitiesByTag(FGameplayTagContainer(ThreadTalesGameplayTags::TAG_Ability_Evade));
-	UE_LOG(LogThreadTalesCombat, Log, TEXT("[Equipment] PerformEvade: %s"), bActivated ? TEXT("SUCCESS") : TEXT("FAILED"));
+	if (IAbilitySystemInterface* ASI = Cast<IAbilitySystemInterface>(GetOwner()))
+	{
+		if (UThreadTalesAbilitySystemComponent* ASC = Cast<UThreadTalesAbilitySystemComponent>(ASI->GetAbilitySystemComponent()))
+		{
+			ASC->AbilityInputTagPressed(ThreadTalesGameplayTags::TAG_Input_Ability_Evade);
+		}
+	}
 }
 
 bool UThreadTalesEquipmentComponent::IsInCombatStance() const

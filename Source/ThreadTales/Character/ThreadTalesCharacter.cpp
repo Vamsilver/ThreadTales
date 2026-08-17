@@ -1,5 +1,3 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
-
 #include "ThreadTalesCharacter.h"
 #include "ThreadTales.h"
 #include "ThreadTalesGameplayTags.h"
@@ -7,6 +5,10 @@
 #include "ThreadTalesAttributeSet.h"
 #include "ThreadTalesEquipmentComponent.h"
 #include "ThreadTalesPlayerController.h"
+#include "Input/ThreadTalesInputConfig.h"
+#include "Input/ThreadTalesInputComponent.h"
+#include "EnhancedInputComponent.h"
+#include "EnhancedInputSubsystems.h"
 #include "Abilities/ThreadTalesGA_Evade.h"
 #include "Components/CapsuleComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -124,6 +126,58 @@ void AThreadTalesCharacter::BeginPlay()
 	}
 }
 
+void AThreadTalesCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
+{
+	Super::SetupPlayerInputComponent(PlayerInputComponent);
+
+	if (UEnhancedInputComponent* EnhancedInputComponent = Cast<UEnhancedInputComponent>(PlayerInputComponent))
+	{
+		if (InputConfig)
+		{
+			if (UThreadTalesInputComponent* TTInputComponent = Cast<UThreadTalesInputComponent>(EnhancedInputComponent))
+			{
+				TTInputComponent->BindAbilityActions(
+					InputConfig,
+					this,
+					&ThisClass::Input_AbilityInputTagPressed,
+					&ThisClass::Input_AbilityInputTagReleased,
+					AbilityBindHandles
+				);
+			}
+			else
+			{
+				// Fallback binding for generic UEnhancedInputComponent
+				for (const FThreadTalesInputAction& Action : InputConfig->AbilityInputActions)
+				{
+					if (Action.InputAction && Action.InputTag.IsValid())
+					{
+						EnhancedInputComponent->BindAction(Action.InputAction, ETriggerEvent::Started, this, &ThisClass::Input_AbilityInputTagPressed, Action.InputTag);
+						EnhancedInputComponent->BindAction(Action.InputAction, ETriggerEvent::Completed, this, &ThisClass::Input_AbilityInputTagReleased, Action.InputTag);
+					}
+				}
+			}
+
+			UE_LOG(LogThreadTales, Display, TEXT("[Character] SetupPlayerInputComponent successfully bound Ability Inputs for '%s'"), *GetName());
+		}
+	}
+}
+
+void AThreadTalesCharacter::Input_AbilityInputTagPressed(FGameplayTag InputTag)
+{
+	if (AbilitySystemComponent)
+	{
+		AbilitySystemComponent->AbilityInputTagPressed(InputTag);
+	}
+}
+
+void AThreadTalesCharacter::Input_AbilityInputTagReleased(FGameplayTag InputTag)
+{
+	if (AbilitySystemComponent)
+	{
+		AbilitySystemComponent->AbilityInputTagReleased(InputTag);
+	}
+}
+
 void AThreadTalesCharacter::ActivateAbilityByTag(FGameplayTag ContainerTag)
 {
 	if (AbilitySystemComponent)
@@ -134,13 +188,17 @@ void AThreadTalesCharacter::ActivateAbilityByTag(FGameplayTag ContainerTag)
 
 void AThreadTalesCharacter::PerformEvade()
 {
+	if (AbilitySystemComponent)
+	{
+		AbilitySystemComponent->AbilityInputTagPressed(ThreadTalesGameplayTags::TAG_Input_Ability_Evade);
+	}
+}
+
+void AThreadTalesCharacter::ToggleCombatStance()
+{
 	if (EquipmentComponent)
 	{
-		EquipmentComponent->PerformEvade();
-	}
-	else if (AbilitySystemComponent)
-	{
-		AbilitySystemComponent->TryActivateAbilitiesByTag(FGameplayTagContainer(ThreadTalesGameplayTags::TAG_Ability_Evade));
+		EquipmentComponent->ToggleCombatStance();
 	}
 }
 
