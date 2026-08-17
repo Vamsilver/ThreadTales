@@ -11,6 +11,7 @@ class UAbilitySystemComponent;
 class UGameplayAbility;
 class UAnimMontage;
 class UStaticMeshComponent;
+class UInputMappingContext;
 
 /**
  * Combat state of the weapon (sheathed on hip/back, being drawn, held in hand, or being sheathed).
@@ -153,6 +154,29 @@ protected:
 
 	UFUNCTION()
 	void OnRep_WeaponState(EWeaponCombatState OldState);
+
+	/** Input Mapping Context specific to this weapon (e.g. IMC_Combat, IMC_Katana, IMC_Slingshot) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ThreadTales|Input")
+	TObjectPtr<UInputMappingContext> WeaponMappingContext;
+
+	/** Priority with which this weapon's IMC is added to EnhancedInputSubsystem */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ThreadTales|Input")
+	int32 WeaponMappingPriority = 1;
+
+	/** If true, the IMC is only active while weapon is drawn in hand. If false, active whenever weapon is equipped. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ThreadTales|Input")
+	bool bAddContextOnlyWhenDrawn = false;
+
+	/** Helper to register weapon's IMC with local player subsystem */
+	UFUNCTION(BlueprintCallable, Category = "ThreadTales|Input")
+	void AddWeaponMappingContext();
+
+	/** Helper to unregister weapon's IMC from local player subsystem */
+	UFUNCTION(BlueprintCallable, Category = "ThreadTales|Input")
+	void RemoveWeaponMappingContext();
+
+	virtual void OnRep_Owner() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 	/** Cache of the owner's ASC */
 	UPROPERTY()

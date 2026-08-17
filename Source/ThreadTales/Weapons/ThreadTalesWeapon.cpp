@@ -1,12 +1,13 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
-
 #include "ThreadTalesWeapon.h"
 #include "ThreadTales.h"
 #include "AbilitySystemComponent.h"
 #include "AbilitySystemInterface.h"
+#include "EnhancedInputSubsystems.h"
+#include "InputMappingContext.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/SceneComponent.h"
 #include "GameFramework/Character.h"
+#include "GameFramework/PlayerController.h"
 #include "Net/UnrealNetwork.h"
 #include "Engine/Engine.h"
 
@@ -91,10 +92,17 @@ void AThreadTalesWeapon::Equip(AActor* NewOwner)
 			}
 		}
 	}
+
+	if (!bAddContextOnlyWhenDrawn || IsDrawn())
+	{
+		AddWeaponMappingContext();
+	}
 }
 
 void AThreadTalesWeapon::Unequip()
 {
+	RemoveWeaponMappingContext();
+
 	if (!HasAuthority()) return;
 
 	// Remove Abilities
@@ -128,6 +136,7 @@ void AThreadTalesWeapon::AttachToHand()
 	{
 		WeaponMesh->AttachToComponent(Character->GetMesh(), FAttachmentTransformRules::SnapToTargetNotIncludingScale, HandSocketName);
 		SetWeaponState(EWeaponCombatState::Drawn);
+		AddWeaponMappingContext();
 	}
 }
 
@@ -140,6 +149,10 @@ void AThreadTalesWeapon::AttachToSheath()
 		{
 			WeaponMesh->AttachToComponent(Character->GetMesh(), FAttachmentTransformRules::SnapToTargetNotIncludingScale, SheathSocketName);
 			SetWeaponState(EWeaponCombatState::Sheathed);
+			if (bAddContextOnlyWhenDrawn)
+			{
+				RemoveWeaponMappingContext();
+			}
 		}
 		else
 		{
@@ -160,6 +173,78 @@ void AThreadTalesWeapon::SetWeaponState(EWeaponCombatState NewState)
 void AThreadTalesWeapon::OnRep_WeaponState(EWeaponCombatState OldState)
 {
 	OnWeaponStateChanged.Broadcast(WeaponState);
+
+	if (bAddContextOnlyWhenDrawn)
+	{
+		if (WeaponState == EWeaponCombatState::Drawn)
+		{
+			AddWeaponMappingContext();
+		}
+		else if (WeaponState == EWeaponCombatState::Sheathed)
+		{
+			RemoveWeaponMappingContext();
+		}
+	}
+}
+
+void AThreadTalesWeapon::OnRep_Owner()
+{
+	Super::OnRep_Owner();
+
+	if (!bAddContextOnlyWhenDrawn || IsDrawn())
+	{
+		AddWeaponMappingContext();
+	}
+}
+
+void AThreadTalesWeapon::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	RemoveWeaponMappingContext();
+	Super::EndPlay(EndPlayReason);
+}
+
+void AThreadTalesWeapon::AddWeaponMappingContext()
+{
+	if (!WeaponMappingContext) return;
+
+	AActor* CurrentOwner = GetOwner();
+	if (!CurrentOwner) return;
+
+	APawn* Pawn = Cast<APawn>(CurrentOwner);
+	if (!Pawn) return;
+
+	APlayerController* PC = Cast<APlayerController>(Pawn->GetController());
+	if (PC && PC->IsLocalPlayerController())
+	{
+		if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PC->GetLocalPlayer()))
+		{
+			Subsystem->AddMappingContext(WeaponMappingContext, WeaponMappingPriority);
+			UE_LOG(LogThreadTalesCombat, Display, TEXT("[Weapon] Added WeaponMappingContext '%s' (Priority %d) for '%s'"), 
+				*WeaponMappingContext->GetName(), WeaponMappingPriority, *CurrentOwner->GetName());
+		}
+	}
+}
+
+void AThreadTalesWeapon::RemoveWeaponMappingContext()
+{
+	if (!WeaponMappingContext) return;
+
+	AActor* CurrentOwner = GetOwner();
+	if (!CurrentOwner) return;
+
+	APawn* Pawn = Cast<APawn>(CurrentOwner);
+	if (!Pawn) return;
+
+	APlayerController* PC = Cast<APlayerController>(Pawn->GetController());
+	if (PC && PC->IsLocalPlayerController())
+	{
+		if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PC->GetLocalPlayer()))
+		{
+			Subsystem->RemoveMappingContext(WeaponMappingContext);
+			UE_LOG(LogThreadTalesCombat, Display, TEXT("[Weapon] Removed WeaponMappingContext '%s' for '%s'"), 
+				*WeaponMappingContext->GetName(), *CurrentOwner->GetName());
+		}
+	}
 }
 
 void AThreadTalesWeapon::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
