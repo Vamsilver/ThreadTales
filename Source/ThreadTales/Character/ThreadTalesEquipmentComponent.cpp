@@ -14,6 +14,7 @@
 #include "GameFramework/Controller.h"
 #include "Animation/AnimMontage.h"
 #include "Animation/AnimInstance.h"
+#include "Animation/ThreadTalesMotionMatchingLibrary.h"
 
 UThreadTalesEquipmentComponent::UThreadTalesEquipmentComponent()
 {

@@ -22,7 +22,10 @@ public class ThreadTales : ModuleRules
 			"GameplayAbilities",
 			"GameplayTags",
 			"GameplayTasks",
-			"Niagara"
+			"Niagara",
+			"PoseSearch",
+			"Chooser",
+			"StructUtils"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] { });

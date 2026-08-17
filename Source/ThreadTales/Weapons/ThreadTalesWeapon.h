@@ -12,6 +12,8 @@ class UGameplayAbility;
 class UAnimMontage;
 class UStaticMeshComponent;
 class UInputMappingContext;
+class UChooserTable;
+class UPoseSearchDatabase;
 
 /**
  * Combat state of the weapon (sheathed on hip/back, being drawn, held in hand, or being sheathed).
@@ -86,6 +88,14 @@ public:
 	UFUNCTION(BlueprintPure, Category = "ThreadTales|Weapon")
 	FGameplayTag GetPrimaryAttackTag() const { return PrimaryAttackTag; }
 
+	/** Returns the Chooser Table configured for this weapon's locomotion */
+	UFUNCTION(BlueprintPure, Category = "ThreadTales|Weapon")
+	class UChooserTable* GetWeaponLocomotionChooserTable() const { return WeaponLocomotionChooserTable; }
+
+	/** Returns the Pose Search Database configured for this weapon's locomotion */
+	UFUNCTION(BlueprintPure, Category = "ThreadTales|Weapon")
+	class UPoseSearchDatabase* GetWeaponLocomotionDatabase() const { return WeaponLocomotionDatabase; }
+
 	/** Event triggered when weapon state changes */
 	UPROPERTY(BlueprintAssignable, Category = "ThreadTales|Weapon")
 	FOnWeaponStateChanged OnWeaponStateChanged;
@@ -136,6 +146,14 @@ protected:
 	/** Array of individual combo strike montages (e.g. Strike1, Strike2, Strike3, Strike4) */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ThreadTales|Animations")
 	TArray<UAnimMontage*> ComboStrikeMontages;
+
+	/** Chooser Table used for Motion Matching locomotion when this weapon is drawn */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ThreadTales|MotionMatching")
+	TObjectPtr<class UChooserTable> WeaponLocomotionChooserTable;
+
+	/** Pose Search Database used for Motion Matching locomotion when this weapon is drawn */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ThreadTales|MotionMatching")
+	TObjectPtr<class UPoseSearchDatabase> WeaponLocomotionDatabase;
 
 	/** The primary gameplay tag triggered by this weapon's primary attack action */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ThreadTales|Abilities")
