@@ -23,3 +23,8 @@ Build/*
 
 # Local configuration files
 Windows/
+
+# Agent Rules & Local configs
+AGENTS.md
+GEMINI.md
+.agents/
