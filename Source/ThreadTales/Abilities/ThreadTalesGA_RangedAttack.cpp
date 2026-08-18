@@ -1,10 +1,8 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
-
-#include "ThreadTalesGA_RangedAttack.h"
+#include "Abilities/ThreadTalesGA_RangedAttack.h"
 #include "ThreadTales.h"
-#include "ThreadTalesGameplayTags.h"
-#include "Weapons/ThreadTalesWeapon_Slingshot.h"
-#include "Character/ThreadTalesEquipmentComponent.h"
+#include "Core/ThreadTalesGameplayTags.h"
+#include "Combat/ThreadTalesWeapon_Slingshot.h"
+#include "Characters/ThreadTalesEquipmentComponent.h"
 #include "Abilities/Tasks/AbilityTask_WaitInputRelease.h"
 #include "Components/ArrowComponent.h"
 #include "GameFramework/Character.h"

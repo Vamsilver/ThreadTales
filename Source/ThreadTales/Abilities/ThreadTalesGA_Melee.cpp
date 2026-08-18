@@ -1,11 +1,9 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
-
-#include "ThreadTalesGA_Melee.h"
+#include "Abilities/ThreadTalesGA_Melee.h"
 #include "ThreadTales.h"
-#include "ThreadTalesGameplayTags.h"
+#include "Core/ThreadTalesGameplayTags.h"
 #include "Abilities/Tasks/AbilityTask_PlayMontageAndWait.h"
-#include "ThreadTalesEquipmentComponent.h"
-#include "ThreadTalesWeapon.h"
+#include "Characters/ThreadTalesEquipmentComponent.h"
+#include "Combat/ThreadTalesWeapon.h"
 #include "GameFramework/Character.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Animation/AnimInstance.h"

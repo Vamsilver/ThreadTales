@@ -1,8 +1,6 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
-
-#include "AnimNotifyState_ComboWindow.h"
+#include "Animation/AnimNotifyState_ComboWindow.h"
 #include "ThreadTales.h"
-#include "ThreadTalesGA_Melee.h"
+#include "Abilities/ThreadTalesGA_Melee.h"
 #include "AbilitySystemComponent.h"
 #include "AbilitySystemInterface.h"
 #include "Components/SkeletalMeshComponent.h"

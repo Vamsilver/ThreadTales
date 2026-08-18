@@ -1,9 +1,7 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
-
-#include "ThreadTalesGA_DoubleJump.h"
+#include "Abilities/ThreadTalesGA_DoubleJump.h"
 #include "ThreadTales.h"
-#include "ThreadTalesGameplayTags.h"
-#include "Character/ThreadTalesCharacter.h"
+#include "Core/ThreadTalesGameplayTags.h"
+#include "Characters/ThreadTalesCharacter.h"
 #include "Abilities/Tasks/AbilityTask_PlayMontageAndWait.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"

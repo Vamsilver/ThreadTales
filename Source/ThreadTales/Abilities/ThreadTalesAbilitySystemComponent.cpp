@@ -1,8 +1,6 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
-
-#include "ThreadTalesAbilitySystemComponent.h"
-#include "ThreadTalesGameplayTags.h"
-#include "ThreadTalesEquipmentComponent.h"
+#include "Abilities/ThreadTalesAbilitySystemComponent.h"
+#include "Core/ThreadTalesGameplayTags.h"
+#include "Characters/ThreadTalesEquipmentComponent.h"
 #include "ThreadTales.h"
 
 UThreadTalesAbilitySystemComponent::UThreadTalesAbilitySystemComponent()
@@ -66,12 +64,12 @@ void UThreadTalesAbilitySystemComponent::AbilityInputTagPressed(const FGameplayT
 			continue;
 		}
 
-		bool bMatches = Spec.DynamicAbilityTags.HasTagExact(InputTag) || 
+		bool bMatches = Spec.GetDynamicSpecSourceTags().HasTagExact(InputTag) || 
 		                Spec.Ability->GetAssetTags().HasTag(InputTag);
 
 		if (!bMatches && MatchingAbilityTag.IsValid())
 		{
-			bMatches = Spec.DynamicAbilityTags.HasTag(MatchingAbilityTag) ||
+			bMatches = Spec.GetDynamicSpecSourceTags().HasTag(MatchingAbilityTag) ||
 			           Spec.Ability->GetAssetTags().HasTag(MatchingAbilityTag);
 		}
 
@@ -105,12 +103,12 @@ void UThreadTalesAbilitySystemComponent::AbilityInputTagReleased(const FGameplay
 			continue;
 		}
 
-		bool bMatches = Spec.DynamicAbilityTags.HasTagExact(InputTag) || 
+		bool bMatches = Spec.GetDynamicSpecSourceTags().HasTagExact(InputTag) || 
 		                Spec.Ability->GetAssetTags().HasTag(InputTag);
 
 		if (!bMatches && MatchingAbilityTag.IsValid())
 		{
-			bMatches = Spec.DynamicAbilityTags.HasTag(MatchingAbilityTag) ||
+			bMatches = Spec.GetDynamicSpecSourceTags().HasTag(MatchingAbilityTag) ||
 			           Spec.Ability->GetAssetTags().HasTag(MatchingAbilityTag);
 		}
 
@@ -120,3 +118,4 @@ void UThreadTalesAbilitySystemComponent::AbilityInputTagReleased(const FGameplay
 		}
 	}
 }
+

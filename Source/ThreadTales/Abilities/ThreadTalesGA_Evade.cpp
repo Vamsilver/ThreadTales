@@ -1,8 +1,6 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
-
-#include "ThreadTalesGA_Evade.h"
+#include "Abilities/ThreadTalesGA_Evade.h"
 #include "ThreadTales.h"
-#include "ThreadTalesGameplayTags.h"
+#include "Core/ThreadTalesGameplayTags.h"
 #include "Abilities/Tasks/AbilityTask_PlayMontageAndWait.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"

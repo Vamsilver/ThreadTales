@@ -1,8 +1,6 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
-
-#include "ThreadTalesAttributeSet.h"
+#include "Abilities/ThreadTalesAttributeSet.h"
 #include "ThreadTales.h"
-#include "Character/ThreadTalesCharacter.h"
+#include "Characters/ThreadTalesCharacter.h"
 #include "Net/UnrealNetwork.h"
 #include "GameplayEffectExtension.h"
 

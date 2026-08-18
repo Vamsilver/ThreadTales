@@ -1,8 +1,6 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
-
-#include "AnimNotifyState_WeaponHitbox.h"
-#include "ThreadTalesEquipmentComponent.h"
-#include "ThreadTalesWeapon.h"
+#include "Animation/AnimNotifyState_WeaponHitbox.h"
+#include "Characters/ThreadTalesEquipmentComponent.h"
+#include "Combat/ThreadTalesWeapon.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/Actor.h"
 
