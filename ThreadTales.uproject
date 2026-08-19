@@ -106,6 +106,10 @@
 		{
 			"Name": "MCPUnreal",
 			"Enabled": true
+		},
+		{
+			"Name": "GASPALS",
+			"Enabled": true
 		}
 	]
 }
