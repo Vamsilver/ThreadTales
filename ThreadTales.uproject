@@ -110,6 +110,30 @@
 		{
 			"Name": "GASPALS",
 			"Enabled": true
+		},
+		{
+			"Name": "AndroidFileServer",
+			"Enabled": false
+		},
+		{
+			"Name": "AndroidDeviceProfileSelector",
+			"Enabled": false
+		},
+		{
+			"Name": "AndroidPermission",
+			"Enabled": false
+		},
+		{
+			"Name": "AndroidMoviePlayer",
+			"Enabled": false
+		},
+		{
+			"Name": "GooglePAD",
+			"Enabled": false
+		},
+		{
+			"Name": "GooglePlayGames",
+			"Enabled": false
 		}
 	]
 }
