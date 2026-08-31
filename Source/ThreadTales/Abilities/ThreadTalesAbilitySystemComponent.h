@@ -4,11 +4,12 @@
 
 #include "CoreMinimal.h"
 #include "AbilitySystemComponent.h"
+#include "GameplayTagContainer.h"
 #include "ThreadTalesAbilitySystemComponent.generated.h"
 
 /**
  * Base Ability System Component for the ThreadTales project.
- * Handles ability execution, tag management, and replication.
+ * Handles ability execution, tag-based input dispatching, and replication.
  */
 UCLASS()
 class THREADTALES_API UThreadTalesAbilitySystemComponent : public UAbilitySystemComponent
@@ -20,4 +21,13 @@ public:
 
 	/** Called when the component is initialized on the owning actor */
 	virtual void InitAbilityActorInfo(AActor* InOwnerActor, AActor* InAvatarActor) override;
+
+	/** Dispatches input pressed event to matching abilities (activates or notifies WaitInputPress) */
+	void AbilityInputTagPressed(const FGameplayTag& InputTag);
+
+	/** Dispatches input released event to matching abilities (notifies WaitInputRelease) */
+	void AbilityInputTagReleased(const FGameplayTag& InputTag);
+
+	/** Helper to map InputTag to corresponding Ability Tag if DynamicAbilityTags are not explicitly set */
+	static FGameplayTag GetAbilityTagForInputTag(const FGameplayTag& InputTag);
 };

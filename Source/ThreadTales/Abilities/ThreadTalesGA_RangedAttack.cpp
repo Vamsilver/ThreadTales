@@ -1,9 +1,9 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
-
-#include "ThreadTalesGA_RangedAttack.h"
+#include "Abilities/ThreadTalesGA_RangedAttack.h"
 #include "ThreadTales.h"
-#include "Weapons/ThreadTalesWeapon_Slingshot.h"
-#include "Character/ThreadTalesEquipmentComponent.h"
+#include "Core/ThreadTalesGameplayTags.h"
+#include "Combat/ThreadTalesWeapon_Slingshot.h"
+#include "Characters/ThreadTalesEquipmentComponent.h"
+#include "Abilities/Tasks/AbilityTask_WaitInputRelease.h"
 #include "Components/ArrowComponent.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/PlayerController.h"
@@ -17,29 +17,16 @@ UThreadTalesGA_RangedAttack::UThreadTalesGA_RangedAttack()
 	AbilityName = TEXT("SlingshotAttack");
 
 	FGameplayTagContainer Tags;
-	FGameplayTag ParentRangedTag = FGameplayTag::RequestGameplayTag(TEXT("Ability.Ranged"), false);
-	if (ParentRangedTag.IsValid())
-	{
-		Tags.AddTag(ParentRangedTag);
-	}
-
-	FGameplayTag SpecificRangedTag = FGameplayTag::RequestGameplayTag(TEXT("Ability.Ranged.Slingshot"), false);
-	if (SpecificRangedTag.IsValid())
-	{
-		Tags.AddTag(SpecificRangedTag);
-	}
-
+	Tags.AddTag(ThreadTalesGameplayTags::TAG_Ability_Ranged);
+	Tags.AddTag(ThreadTalesGameplayTags::TAG_Ability_Ranged_Slingshot);
 	SetAssetTags(Tags);
 
-	FGameplayTag AimingTag = FGameplayTag::RequestGameplayTag(TEXT("State.Combat.Aiming"), false);
-	if (AimingTag.IsValid())
-	{
-		ActivationOwnedTags.AddTag(AimingTag);
-	}
+	ActivationOwnedTags.AddTag(ThreadTalesGameplayTags::TAG_State_Combat_Aiming);
 
 	bIsCharging = false;
 	ChargeStartTime = 0.0f;
 	ActiveSlingshot = nullptr;
+	WaitInputReleaseTask = nullptr;
 }
 
 void UThreadTalesGA_RangedAttack::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData)
@@ -98,7 +85,20 @@ void UThreadTalesGA_RangedAttack::ActivateAbility(const FGameplayAbilitySpecHand
 		Character->PlayAnimMontage(ActiveSlingshot->AimMontage);
 	}
 
+	// Setup GAS WaitInputRelease task to automatically trigger release when player lets go of input
+	WaitInputReleaseTask = UAbilityTask_WaitInputRelease::WaitInputRelease(this, true);
+	if (WaitInputReleaseTask)
+	{
+		WaitInputReleaseTask->OnRelease.AddDynamic(this, &UThreadTalesGA_RangedAttack::OnInputReleasedCallback);
+		WaitInputReleaseTask->ReadyForActivation();
+	}
+
 	UE_LOG(LogThreadTalesCombat, Display, TEXT("[GA_RangedAttack] Slingshot Aim & Charge started!"));
+}
+
+void UThreadTalesGA_RangedAttack::OnInputReleasedCallback(float TimeHeld)
+{
+	ReleaseAndFire();
 }
 
 void UThreadTalesGA_RangedAttack::InputReleased(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo)
@@ -187,6 +187,12 @@ void UThreadTalesGA_RangedAttack::EndAbility(const FGameplayAbilitySpecHandle Ha
 {
 	bIsCharging = false;
 	ActiveSlingshot = nullptr;
+
+	if (WaitInputReleaseTask)
+	{
+		WaitInputReleaseTask->EndTask();
+		WaitInputReleaseTask = nullptr;
+	}
 
 	Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
 }

@@ -21,38 +21,24 @@ public class ThreadTales : ModuleRules
 			"Slate",
 			"GameplayAbilities",
 			"GameplayTags",
-			"GameplayTasks"
+			"GameplayTasks",
+			"Niagara",
+			"PoseSearch",
+			"Chooser",
+			"StructUtils"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] { });
 
 		PublicIncludePaths.AddRange(new string[] {
 			"ThreadTales",
-			"ThreadTales/Character",
-			"ThreadTales/Weapons",
+			"ThreadTales/Core",
+			"ThreadTales/Characters",
+			"ThreadTales/Combat",
 			"ThreadTales/Abilities",
 			"ThreadTales/Animation",
-			"ThreadTales/Variant_Platforming",
-			"ThreadTales/Variant_Platforming/Animation",
-			"ThreadTales/Variant_Combat",
-			"ThreadTales/Variant_Combat/AI",
-			"ThreadTales/Variant_Combat/Animation",
-			"ThreadTales/Variant_Combat/Gameplay",
-			"ThreadTales/Variant_Combat/Interfaces",
-			"ThreadTales/Variant_Combat/UI",
-			"ThreadTales/Variant_SideScrolling",
-			"ThreadTales/Variant_SideScrolling/AI",
-			"ThreadTales/Variant_SideScrolling/Gameplay",
-			"ThreadTales/Variant_SideScrolling/Interfaces",
-			"ThreadTales/Variant_SideScrolling/UI"
+			"ThreadTales/Input"
 		});
-
-		// Uncomment if you are using Slate UI
-		// PrivateDependencyModuleNames.AddRange(new string[] { "Slate", "SlateCore" });
-
-		// Uncomment if you are using online features
-		// PrivateDependencyModuleNames.Add("OnlineSubsystem");
-
-		// To include OnlineSubsystemSteam, add it to the plugins section in your uproject file with the Enabled attribute set to true
 	}
 }
+

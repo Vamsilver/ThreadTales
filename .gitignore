@@ -1,9 +1,11 @@
 # Unreal Engine temp and build directories
-Binaries/*
-DerivedDataCache/*
-Intermediate/*
-Saved/*
-Build/*
+Binaries/
+DerivedDataCache/
+Intermediate/
+Saved/
+Build/
+**/Intermediate/
+**/Binaries/
 
 # Visual Studio files
 .vs/
@@ -23,3 +25,8 @@ Build/*
 
 # Local configuration files
 Windows/
+
+# Agent Rules & Local configs
+AGENTS.md
+GEMINI.md
+.agents/

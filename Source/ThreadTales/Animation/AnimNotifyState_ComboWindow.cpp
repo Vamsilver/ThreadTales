@@ -1,8 +1,6 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
-
-#include "AnimNotifyState_ComboWindow.h"
+#include "Animation/AnimNotifyState_ComboWindow.h"
 #include "ThreadTales.h"
-#include "ThreadTalesGA_Melee.h"
+#include "Abilities/ThreadTalesGA_Melee.h"
 #include "AbilitySystemComponent.h"
 #include "AbilitySystemInterface.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -51,19 +49,25 @@ void UAnimNotifyState_ComboWindow::NotifyBegin(USkeletalMeshComponent* MeshComp,
 {
 	Super::NotifyBegin(MeshComp, Animation, TotalDuration, EventReference);
 
+	if (!MeshComp || !MeshComp->GetWorld() || !MeshComp->GetWorld()->IsGameWorld())
+	{
+		return;
+	}
+
 	if (UThreadTalesGA_Melee* MeleeAbility = GetActiveMeleeAbility(MeshComp))
 	{
 		MeleeAbility->NotifyComboWindowBegin();
-	}
-	else
-	{
-		UE_LOG(LogThreadTalesCombat, Warning, TEXT("[Combo Notify] Warning: Melee Combo Window started, but no active ThreadTalesGA_Melee ability was found on character!"));
 	}
 }
 
 void UAnimNotifyState_ComboWindow::NotifyEnd(USkeletalMeshComponent* MeshComp, UAnimSequenceBase* Animation, const FAnimNotifyEventReference& EventReference)
 {
 	Super::NotifyEnd(MeshComp, Animation, EventReference);
+
+	if (!MeshComp || !MeshComp->GetWorld() || !MeshComp->GetWorld()->IsGameWorld())
+	{
+		return;
+	}
 
 	if (UThreadTalesGA_Melee* MeleeAbility = GetActiveMeleeAbility(MeshComp))
 	{

@@ -1,8 +1,6 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
-
-#include "AnimNotifyState_WeaponHitbox.h"
-#include "ThreadTalesEquipmentComponent.h"
-#include "ThreadTalesWeapon_Sword.h"
+#include "Animation/AnimNotifyState_WeaponHitbox.h"
+#include "Characters/ThreadTalesEquipmentComponent.h"
+#include "Combat/ThreadTalesWeapon.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/Actor.h"
 
@@ -14,7 +12,7 @@ void UAnimNotifyState_WeaponHitbox::NotifyBegin(USkeletalMeshComponent* MeshComp
 {
 	Super::NotifyBegin(MeshComp, Animation, TotalDuration, EventReference);
 
-	if (!MeshComp) return;
+	if (!MeshComp || !MeshComp->GetWorld() || !MeshComp->GetWorld()->IsGameWorld()) return;
 
 	AActor* OwnerActor = MeshComp->GetOwner();
 	if (!OwnerActor) return;
@@ -22,9 +20,9 @@ void UAnimNotifyState_WeaponHitbox::NotifyBegin(USkeletalMeshComponent* MeshComp
 	UThreadTalesEquipmentComponent* EquipComp = OwnerActor->FindComponentByClass<UThreadTalesEquipmentComponent>();
 	if (!EquipComp) return;
 
-	if (AThreadTalesWeapon_Sword* Sword = Cast<AThreadTalesWeapon_Sword>(EquipComp->GetCurrentWeapon()))
+	if (AThreadTalesWeapon* CurrentWeapon = EquipComp->GetCurrentWeapon())
 	{
-		Sword->SetHitboxEnabled(true);
+		CurrentWeapon->SetHitboxEnabled(true);
 	}
 }
 
@@ -32,7 +30,7 @@ void UAnimNotifyState_WeaponHitbox::NotifyEnd(USkeletalMeshComponent* MeshComp, 
 {
 	Super::NotifyEnd(MeshComp, Animation, EventReference);
 
-	if (!MeshComp) return;
+	if (!MeshComp || !MeshComp->GetWorld() || !MeshComp->GetWorld()->IsGameWorld()) return;
 
 	AActor* OwnerActor = MeshComp->GetOwner();
 	if (!OwnerActor) return;
@@ -40,9 +38,9 @@ void UAnimNotifyState_WeaponHitbox::NotifyEnd(USkeletalMeshComponent* MeshComp, 
 	UThreadTalesEquipmentComponent* EquipComp = OwnerActor->FindComponentByClass<UThreadTalesEquipmentComponent>();
 	if (!EquipComp) return;
 
-	if (AThreadTalesWeapon_Sword* Sword = Cast<AThreadTalesWeapon_Sword>(EquipComp->GetCurrentWeapon()))
+	if (AThreadTalesWeapon* CurrentWeapon = EquipComp->GetCurrentWeapon())
 	{
-		Sword->SetHitboxEnabled(false);
+		CurrentWeapon->SetHitboxEnabled(false);
 	}
 }
 

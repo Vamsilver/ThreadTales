@@ -30,6 +30,12 @@ public:
 	virtual void PreAttributeChange(const FGameplayAttribute& Attribute, float& NewValue) override;
 	virtual void PostGameplayEffectExecute(const struct FGameplayEffectModCallbackData& Data) override;
 
+	/** Applies direct incoming damage to this AttributeSet and notifies the owning character */
+	void ReceiveDamage(float DamageAmount, AActor* SourceActor = nullptr);
+
+	/** Resets current health back to MaxHealth */
+	void ResetHealth();
+
 	// Current Health
 	UPROPERTY(BlueprintReadOnly, Category = "Attributes|Health", ReplicatedUsing = OnRep_Health)
 	FGameplayAttributeData Health;
