@@ -83,37 +83,35 @@ UAnimMontage* UThreadTalesGA_DoubleJump::GetMontageForDirection(EDoubleJumpDirec
 		return nullptr;
 	};
 
-	UAnimMontage* FallbackMontage = GetEffectiveMontage(DoubleJumpMontage, TTChar ? TTChar->DoubleJumpMontage : nullptr);
-
 	switch (Direction)
 	{
 	case EDoubleJumpDirection::Neutral:
 	{
 		UAnimMontage* M = GetEffectiveMontage(DoubleJumpNeutralMontage, TTChar ? TTChar->DoubleJumpNeutralMontage : nullptr);
-		return M ? M : FallbackMontage;
+		return M;
 	}
 	case EDoubleJumpDirection::Forward:
 	{
 		UAnimMontage* M = GetEffectiveMontage(DoubleJumpForwardMontage, TTChar ? TTChar->DoubleJumpForwardMontage : nullptr);
-		return M ? M : FallbackMontage;
+		return M;
 	}
 	case EDoubleJumpDirection::Backward:
 	{
 		UAnimMontage* M = GetEffectiveMontage(DoubleJumpBackwardMontage, TTChar ? TTChar->DoubleJumpBackwardMontage : nullptr);
-		return M ? M : FallbackMontage;
+		return M;
 	}
 	case EDoubleJumpDirection::Left:
 	{
 		UAnimMontage* M = GetEffectiveMontage(DoubleJumpLeftMontage, TTChar ? TTChar->DoubleJumpLeftMontage : nullptr);
-		return M ? M : FallbackMontage;
+		return M;
 	}
 	case EDoubleJumpDirection::Right:
 	{
 		UAnimMontage* M = GetEffectiveMontage(DoubleJumpRightMontage, TTChar ? TTChar->DoubleJumpRightMontage : nullptr);
-		return M ? M : FallbackMontage;
+		return M;
 	}
 	default:
-		return FallbackMontage;
+		return nullptr;
 	}
 }
 
@@ -144,10 +142,6 @@ void UThreadTalesGA_DoubleJump::ActivateAbility(const FGameplayAbilitySpecHandle
 	UNiagaraSystem* EffectToPlay = DoubleJumpEffect ? DoubleJumpEffect.Get() : (TTChar ? TTChar->DoubleJumpEffect.Get() : nullptr);
 	
 	float EffectiveZVelocity = DoubleJumpZVelocity;
-	if (TTChar && TTChar->DoubleJumpZVelocity > 0.0f)
-	{
-		EffectiveZVelocity = TTChar->DoubleJumpZVelocity;
-	}
 
 	// Lock CMC auto-rotation to movement so character orientation is not twisted mid-air during the flip
 	if (UCharacterMovementComponent* CMC = Character->GetCharacterMovement())
@@ -165,11 +159,23 @@ void UThreadTalesGA_DoubleJump::ActivateAbility(const FGameplayAbilitySpecHandle
 		Character->SetActorRotation(FRotator(0.0f, Controller->GetControlRotation().Yaw, 0.0f));
 	}
 
-	// Apply vertical jump impulse
+	// Apply jump impulse (vertical and horizontal)
 	if (UCharacterMovementComponent* CMC = Character->GetCharacterMovement())
 	{
 		FVector CurrentVelocity = CMC->Velocity;
 		CurrentVelocity.Z = EffectiveZVelocity;
+
+		if (Direction != EDoubleJumpDirection::Neutral)
+		{
+			FVector InputVector = Character->GetLastMovementInputVector();
+			if (!InputVector.IsNearlyZero())
+			{
+				InputVector.Normalize();
+				CurrentVelocity.X = InputVector.X * DoubleJumpHorizontalVelocity;
+				CurrentVelocity.Y = InputVector.Y * DoubleJumpHorizontalVelocity;
+			}
+		}
+
 		CMC->Velocity = CurrentVelocity;
 	}
 
@@ -210,10 +216,28 @@ void UThreadTalesGA_DoubleJump::ActivateAbility(const FGameplayAbilitySpecHandle
 	{
 		EndAbility(Handle, ActorInfo, ActivationInfo, true, false);
 	}
+
+	// Failsafe: Ensure ability ends even if montage delegates fail
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().SetTimer(FailsafeTimerHandle, [this]()
+		{
+			if (IsActive())
+			{
+				UE_LOG(LogThreadTales, Warning, TEXT("[DoubleJump] Failsafe timer triggered EndAbility!"));
+				EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, false);
+			}
+		}, 1.5f, false);
+	}
 }
 
 void UThreadTalesGA_DoubleJump::EndAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, bool bReplicateEndAbility, bool bWasCancelled)
 {
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(FailsafeTimerHandle);
+	}
+
 	// Restore CMC rotation settings
 	if (ACharacter* Character = Cast<ACharacter>(GetAvatarActorFromActorInfo()))
 	{

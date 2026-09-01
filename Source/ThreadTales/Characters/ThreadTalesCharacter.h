@@ -222,6 +222,8 @@ public:
 	/** Called when a double jump is performed */
 	virtual void OnDoubleJump();
 
+	virtual void OnMovementModeChanged(EMovementMode PrevMovementMode, uint8 PreviousCustomMode) override;
+
 	/** Returns true if character is in mid-air performing a multi/double jump */
 	UFUNCTION(BlueprintPure, Category = "ThreadTales|Movement")
 	bool IsDoubleJumping() const;

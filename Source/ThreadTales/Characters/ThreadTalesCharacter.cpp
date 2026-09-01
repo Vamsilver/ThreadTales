@@ -438,19 +438,55 @@ void AThreadTalesCharacter::Jump()
 void AThreadTalesCharacter::Landed(const FHitResult& Hit)
 {
 	Super::Landed(Hit);
+}
 
-	bHasDoubleJumpedInAir = false;
+void AThreadTalesCharacter::OnMovementModeChanged(EMovementMode PrevMovementMode, uint8 PreviousCustomMode)
+{
+	Super::OnMovementModeChanged(PrevMovementMode, PreviousCustomMode);
+
+	// If we were falling and now we are NOT falling (e.g. landed, grabbed a ledge for parkour, started swimming)
+	if (PrevMovementMode == MOVE_Falling && GetCharacterMovement()->MovementMode != MOVE_Falling)
+	{
+		bHasDoubleJumpedInAir = false;
+
+		if (AbilitySystemComponent)
+		{
+			if (AbilitySystemComponent->HasMatchingGameplayTag(ThreadTalesGameplayTags::TAG_State_Movement_HasAirDashed))
+			{
+				AbilitySystemComponent->RemoveLooseGameplayTag(ThreadTalesGameplayTags::TAG_State_Movement_HasAirDashed);
+			}
+
+			// Force-cancel double jump if it's still running (e.g. grabbed a ledge mid-air before montage finished)
+			FGameplayTagContainer TagsToCancel;
+			TagsToCancel.AddTag(ThreadTalesGameplayTags::TAG_Ability_Movement_DoubleJump);
+			AbilitySystemComponent->CancelAbilities(&TagsToCancel);
+		}
+	}
 }
 
 void AThreadTalesCharacter::CheckJumpInput(float DeltaTime)
 {
+	// Track if we were falling BEFORE native jump logic processes
+	bool bWasFallingBeforeJump = GetCharacterMovement() && GetCharacterMovement()->IsFalling();
+
 	// In GASP / Enhanced Input: when jump is pressed in the air, ensure jump transition state is ready for the air jump
-	if (bPressedJump && GetCharacterMovement() && GetCharacterMovement()->IsFalling() && JumpCurrentCount > 0)
+	if (bPressedJump && bWasFallingBeforeJump && JumpCurrentCount > 0)
 	{
 		bWasJumping = false;
 	}
 
+	int32 JumpCountBefore = JumpCurrentCount;
+
 	Super::CheckJumpInput(DeltaTime);
+
+	// If a jump actually occurred this frame, and we were ALREADY falling before the jump started,
+	// it means we either double-jumped, or we jumped after walking off a ledge.
+	// In both cases, it's an air jump (Double Jump).
+	if (JumpCurrentCount > JumpCountBefore && bWasFallingBeforeJump && !bHasDoubleJumpedInAir)
+	{
+		bHasDoubleJumpedInAir = true;
+		OnDoubleJump();
+	}
 }
 
 void AThreadTalesCharacter::OnJumped_Implementation()
@@ -458,102 +494,22 @@ void AThreadTalesCharacter::OnJumped_Implementation()
 	Super::OnJumped_Implementation();
 
 	const bool bIsFalling = GetCharacterMovement() && GetCharacterMovement()->IsFalling();
-	UE_LOG(LogThreadTales, Warning, TEXT("[Jump] %s OnJumped: JumpCurrentCount = %d / %d (IsFalling = %s)"), 
-		*GetName(), JumpCurrentCount, JumpMaxCount, bIsFalling ? TEXT("true") : TEXT("false"));
-
-	if (JumpCurrentCount > 1 && !bHasDoubleJumpedInAir)
-	{
-		bHasDoubleJumpedInAir = true;
-		OnDoubleJump();
-	}
+	UE_LOG(LogThreadTales, Display, TEXT("[Jump] %s OnJumped: JumpCurrentCount = %d / %d"), 
+		*GetName(), JumpCurrentCount, JumpMaxCount);
 }
 
 void AThreadTalesCharacter::OnDoubleJump()
 {
-	// 1. Try activating Double Jump via GAS (Ability.Movement.DoubleJump)
+	// Try activating Double Jump via GAS (Ability.Movement.DoubleJump)
 	bool bActivatedViaGAS = false;
 	if (AbilitySystemComponent)
 	{
 		bActivatedViaGAS = AbilitySystemComponent->TryActivateAbilitiesByTag(FGameplayTagContainer(ThreadTalesGameplayTags::TAG_Ability_Movement_DoubleJump));
 	}
 
-	// 2. Fallback: if not handled via GAS, execute character's default movement / montage logic
 	if (!bActivatedViaGAS)
 	{
-		if (DoubleJumpZVelocity > 0.0f && GetCharacterMovement())
-		{
-			FVector CurrentVelocity = GetCharacterMovement()->Velocity;
-			CurrentVelocity.Z = DoubleJumpZVelocity;
-			GetCharacterMovement()->Velocity = CurrentVelocity;
-			UE_LOG(LogThreadTales, Display, TEXT("[DoubleJump] Applied DoubleJumpZVelocity = %.1f"), DoubleJumpZVelocity);
-		}
-
-		UAnimMontage* MontageToPlay = DoubleJumpMontage ? DoubleJumpMontage.Get() : nullptr;
-
-		// Check movement input direction
-		FVector InputVector = GetLastMovementInputVector();
-		if (InputVector.IsNearlyZero() && GetCharacterMovement())
-		{
-			InputVector = GetCharacterMovement()->GetCurrentAcceleration().GetSafeNormal();
-		}
-
-		if (InputVector.IsNearlyZero())
-		{
-			if (DoubleJumpNeutralMontage) MontageToPlay = DoubleJumpNeutralMontage.Get();
-		}
-		else
-		{
-			AController* C = GetController();
-			FRotator CamRot = C ? C->GetControlRotation() : GetActorRotation();
-			FRotator InputRot = InputVector.Rotation();
-			FRotator DeltaRot = (InputRot - CamRot).GetNormalized();
-			float Angle = DeltaRot.Yaw;
-
-			if (Angle >= -45.0f && Angle < 45.0f)
-			{
-				if (DoubleJumpForwardMontage) MontageToPlay = DoubleJumpForwardMontage.Get();
-			}
-			else if (Angle >= 45.0f && Angle < 135.0f)
-			{
-				if (DoubleJumpRightMontage) MontageToPlay = DoubleJumpRightMontage.Get();
-			}
-			else if (Angle >= -135.0f && Angle < -45.0f)
-			{
-				if (DoubleJumpLeftMontage) MontageToPlay = DoubleJumpLeftMontage.Get();
-			}
-			else
-			{
-				if (DoubleJumpBackwardMontage) MontageToPlay = DoubleJumpBackwardMontage.Get();
-			}
-
-			if (C)
-			{
-				SetActorRotation(FRotator(0.0f, C->GetControlRotation().Yaw, 0.0f));
-			}
-		}
-
-		if (MontageToPlay)
-		{
-			UAnimInstance* AnimInst = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
-			const float MontageDuration = PlayAnimMontage(MontageToPlay);
-			UE_LOG(LogThreadTales, Display, TEXT("[DoubleJump] %s DoubleJump Montage '%s' -> PlayAnimMontage result: %.2f sec"), 
-				*GetName(), *MontageToPlay->GetName(), MontageDuration);
-		}
-		else
-		{
-			UE_LOG(LogThreadTales, Warning, TEXT("[DoubleJump] %s has NO DoubleJumpMontage assigned!"), *GetName());
-		}
-
-		if (DoubleJumpSound)
-		{
-			UGameplayStatics::PlaySoundAtLocation(this, DoubleJumpSound, GetActorLocation());
-		}
-
-		if (DoubleJumpEffect)
-		{
-			const float CapsuleHalfHeight = GetCapsuleComponent() ? GetCapsuleComponent()->GetScaledCapsuleHalfHeight() : 0.f;
-			UNiagaraFunctionLibrary::SpawnSystemAtLocation(GetWorld(), DoubleJumpEffect, GetActorLocation() - FVector(0.f, 0.f, CapsuleHalfHeight));
-		}
+		UE_LOG(LogThreadTales, Warning, TEXT("[DoubleJump] GAS failed to activate Double Jump ability for %s! Check DefaultAbilities or stuck abilities."), *GetName());
 	}
 
 	OnDoubleJumped.Broadcast(this);
