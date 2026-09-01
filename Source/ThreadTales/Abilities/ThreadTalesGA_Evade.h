@@ -69,6 +69,14 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ThreadTales|Evade|Montages")
 	UAnimMontage* DefaultDodgeMontage;
 
+	/** Default percentage of the montage length to check for early cancel (0.0 to 1.0) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ThreadTales|Evade|Timing")
+	float DefaultEarlyCancelPercentage = 0.75f;
+
+	/** Optional specific cancel percentage for specific montages. Overrides the default if the montage is added here. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ThreadTales|Evade|Timing")
+	TMap<UAnimMontage*, float> MontageCancelPercentages;
+
 protected:
 	UPROPERTY()
 	UAbilityTask_PlayMontageAndWait* MontageTask;
@@ -81,6 +89,9 @@ protected:
 
 	UFUNCTION()
 	void OnMontageCancelled();
+
+	UFUNCTION()
+	void OnCheckInputTimerFinished();
 
 	UAnimMontage* GetMontageForDirection(EEvadeDirection Direction) const;
 };
