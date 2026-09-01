@@ -116,6 +116,25 @@ UAnimMontage* UThreadTalesGA_Evade::GetMontageForDirection(EEvadeDirection Direc
 	}
 }
 
+bool UThreadTalesGA_Evade::CanActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayTagContainer* SourceTags, const FGameplayTagContainer* TargetTags, FGameplayTagContainer* OptionalRelevantTags) const
+{
+	if (!Super::CanActivateAbility(Handle, ActorInfo, SourceTags, TargetTags, OptionalRelevantTags))
+	{
+		return false;
+	}
+
+	ACharacter* Character = Cast<ACharacter>(ActorInfo->AvatarActor.Get());
+	if (Character && Character->GetCharacterMovement())
+	{
+		// Ground evade should NOT activate if falling
+		if (Character->GetCharacterMovement()->IsFalling())
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
 void UThreadTalesGA_Evade::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData)
 {
 	Super::ActivateAbility(Handle, ActorInfo, ActivationInfo, TriggerEventData);
