@@ -34,6 +34,7 @@ class THREADTALES_API UThreadTalesGA_Evade : public UThreadTalesGameplayAbility
 public:
 	UThreadTalesGA_Evade();
 
+	virtual bool CanActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayTagContainer* SourceTags, const FGameplayTagContainer* TargetTags, FGameplayTagContainer* OptionalRelevantTags) const override;
 	virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData) override;
 
 	/** Calculates the 8-way evade direction based on WASD input vector relative to camera rotation */
@@ -69,6 +70,14 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ThreadTales|Evade|Montages")
 	UAnimMontage* DefaultDodgeMontage;
 
+	/** Default percentage of the montage length to check for early cancel (0.0 to 1.0) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ThreadTales|Evade|Timing")
+	float DefaultEarlyCancelPercentage = 0.75f;
+
+	/** Optional specific cancel percentage for specific montages. Overrides the default if the montage is added here. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ThreadTales|Evade|Timing")
+	TMap<UAnimMontage*, float> MontageCancelPercentages;
+
 protected:
 	UPROPERTY()
 	UAbilityTask_PlayMontageAndWait* MontageTask;
@@ -81,6 +90,9 @@ protected:
 
 	UFUNCTION()
 	void OnMontageCancelled();
+
+	UFUNCTION()
+	void OnCheckInputTimerFinished();
 
 	UAnimMontage* GetMontageForDirection(EEvadeDirection Direction) const;
 };

@@ -11,6 +11,9 @@ namespace ThreadTalesGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG(TAG_Ability_Evade, "Ability.Evade");
 	UE_DEFINE_GAMEPLAY_TAG(TAG_Ability_Movement_DoubleJump, "Ability.Movement.DoubleJump");
 
+	// Events
+	UE_DEFINE_GAMEPLAY_TAG(TAG_Event_Evade_CheckInput, "Event.Ability.Evade.CheckInput");
+
 	// Combat & Movement States
 	UE_DEFINE_GAMEPLAY_TAG(TAG_State_Combat_InCombat, "State.Combat.InCombat");
 	UE_DEFINE_GAMEPLAY_TAG(TAG_State_Combat_Attacking, "State.Combat.Attacking");
@@ -18,6 +21,7 @@ namespace ThreadTalesGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG(TAG_State_Combat_Evading, "State.Combat.Evading");
 	UE_DEFINE_GAMEPLAY_TAG(TAG_State_Combat_Invulnerable, "State.Combat.Invulnerable");
 	UE_DEFINE_GAMEPLAY_TAG(TAG_State_Movement_DoubleJumping, "State.Movement.DoubleJumping");
+	UE_DEFINE_GAMEPLAY_TAG(TAG_State_Movement_HasAirDashed, "State.Movement.HasAirDashed");
 
 	// Input Tags
 	UE_DEFINE_GAMEPLAY_TAG(TAG_Input_Move, "InputTag.Move");

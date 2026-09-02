@@ -2,6 +2,7 @@
 #include "ThreadTales.h"
 #include "Core/ThreadTalesGameplayTags.h"
 #include "Abilities/Tasks/AbilityTask_PlayMontageAndWait.h"
+#include "Abilities/Tasks/AbilityTask_WaitDelay.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
@@ -115,6 +116,25 @@ UAnimMontage* UThreadTalesGA_Evade::GetMontageForDirection(EEvadeDirection Direc
 	}
 }
 
+bool UThreadTalesGA_Evade::CanActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayTagContainer* SourceTags, const FGameplayTagContainer* TargetTags, FGameplayTagContainer* OptionalRelevantTags) const
+{
+	if (!Super::CanActivateAbility(Handle, ActorInfo, SourceTags, TargetTags, OptionalRelevantTags))
+	{
+		return false;
+	}
+
+	ACharacter* Character = Cast<ACharacter>(ActorInfo->AvatarActor.Get());
+	if (Character && Character->GetCharacterMovement())
+	{
+		// Ground evade should NOT activate if falling
+		if (Character->GetCharacterMovement()->IsFalling())
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
 void UThreadTalesGA_Evade::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData)
 {
 	Super::ActivateAbility(Handle, ActorInfo, ActivationInfo, TriggerEventData);
@@ -167,6 +187,41 @@ void UThreadTalesGA_Evade::ActivateAbility(const FGameplayAbilitySpecHandle Hand
 	{
 		UE_LOG(LogThreadTalesCombat, Warning, TEXT("[Evade GA] No montage assigned for Evade direction %d!"), static_cast<int32>(Direction));
 		EndAbility(Handle, ActorInfo, ActivationInfo, true, false);
+	}
+
+	// Automatically check input based on montage length and configured percentages
+	float CancelPercentage = DefaultEarlyCancelPercentage;
+	if (MontageCancelPercentages.Contains(MontageToPlay))
+	{
+		CancelPercentage = MontageCancelPercentages[MontageToPlay];
+	}
+	
+	float CheckTime = MontageToPlay->GetPlayLength() * FMath::Clamp(CancelPercentage, 0.0f, 1.0f);
+	
+	class UAbilityTask_WaitDelay* DelayTask = UAbilityTask_WaitDelay::WaitDelay(this, CheckTime);
+	if (DelayTask)
+	{
+		DelayTask->OnFinish.AddDynamic(this, &UThreadTalesGA_Evade::OnCheckInputTimerFinished);
+		DelayTask->ReadyForActivation();
+	}
+}
+
+void UThreadTalesGA_Evade::OnCheckInputTimerFinished()
+{
+	ACharacter* Character = Cast<ACharacter>(GetAvatarActorFromActorInfo());
+	if (Character && Character->GetCharacterMovement())
+	{
+		// If player is NOT pressing movement keys (acceleration is nearly zero)
+		if (Character->GetCharacterMovement()->GetCurrentAcceleration().IsNearlyZero())
+		{
+			UE_LOG(LogThreadTalesCombat, Display, TEXT("[Evade GA] Movement input released. Cancelling evade montage early to return to Idle."));
+			MontageStop(0.2f); // Smooth blend out
+			EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, false);
+		}
+		else
+		{
+			UE_LOG(LogThreadTalesCombat, Display, TEXT("[Evade GA] Movement input detected. Allowing dodge to seamlessly transition into run."));
+		}
 	}
 }
 

@@ -47,6 +47,10 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ThreadTales|DoubleJump")
 	float DoubleJumpZVelocity;
 
+	/** Horizontal push strength for directional double jumps */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ThreadTales|DoubleJump")
+	float DoubleJumpHorizontalVelocity = 800.0f;
+
 	/** Neutral / In-Place double jump montage (when no WASD input) */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ThreadTales|DoubleJump|Montages")
 	TObjectPtr<UAnimMontage> DoubleJumpNeutralMontage;
@@ -67,10 +71,6 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ThreadTales|DoubleJump|Montages")
 	TObjectPtr<UAnimMontage> DoubleJumpRightMontage;
 
-	/** Fallback / Default single double jump montage */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ThreadTales|DoubleJump|Montages")
-	TObjectPtr<UAnimMontage> DoubleJumpMontage;
-
 	/** Optional Sound to play on double jump */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ThreadTales|DoubleJump")
 	TObjectPtr<USoundBase> DoubleJumpSound;
@@ -87,6 +87,8 @@ protected:
 
 	bool bSavedOrientRotationToMovement;
 	bool bSavedUseControllerDesiredRotation;
+
+	FTimerHandle FailsafeTimerHandle;
 
 	UFUNCTION()
 	void OnMontageCompleted();
