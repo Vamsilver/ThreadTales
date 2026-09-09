@@ -6,6 +6,7 @@
 #include "Abilities/ThreadTalesAttributeSet.h"
 #include "Abilities/ThreadTalesGA_Evade.h"
 #include "Characters/ThreadTalesEquipmentComponent.h"
+#include "Characters/ThreadTalesTraversalComponent.h"
 #include "Combat/ThreadTalesWeapon.h"
 #include "Input/ThreadTalesInputConfig.h"
 #include "Input/ThreadTalesInputComponent.h"
@@ -47,6 +48,9 @@ AThreadTalesCharacter::AThreadTalesCharacter()
 
 	// Create equipment manager
 	EquipmentComponent = CreateDefaultSubobject<UThreadTalesEquipmentComponent>(TEXT("EquipmentComponent"));
+
+	// Create traversal manager
+	TraversalComponent = CreateDefaultSubobject<UThreadTalesTraversalComponent>(TEXT("TraversalComponent"));
 
 	// Enable solid Pawn-to-Pawn collision blocking so characters cannot walk through each other
 	if (GetCapsuleComponent())
@@ -423,8 +427,22 @@ bool AThreadTalesCharacter::IsDoubleJumping() const
 	return JumpCurrentCount > 1;
 }
 
+void AThreadTalesCharacter::RequestReleaseLedge()
+{
+	if (TraversalComponent && TraversalComponent->IsLedgeClimbing())
+	{
+		TraversalComponent->ReleaseLedge();
+	}
+}
+
 void AThreadTalesCharacter::Jump()
 {
+	if (TraversalComponent && TraversalComponent->IsLedgeClimbing())
+	{
+		TraversalComponent->ClimbUp();
+		return;
+	}
+
 	if (GetCharacterMovement() && GetCharacterMovement()->IsFalling() && !bHasDoubleJumpedInAir)
 	{
 		bHasDoubleJumpedInAir = true;

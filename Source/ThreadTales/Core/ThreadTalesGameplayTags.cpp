@@ -22,6 +22,7 @@ namespace ThreadTalesGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG(TAG_State_Combat_Invulnerable, "State.Combat.Invulnerable");
 	UE_DEFINE_GAMEPLAY_TAG(TAG_State_Movement_DoubleJumping, "State.Movement.DoubleJumping");
 	UE_DEFINE_GAMEPLAY_TAG(TAG_State_Movement_HasAirDashed, "State.Movement.HasAirDashed");
+	UE_DEFINE_GAMEPLAY_TAG(TAG_State_Movement_Climbing, "State.Movement.Climbing");
 
 	// Input Tags
 	UE_DEFINE_GAMEPLAY_TAG(TAG_Input_Move, "InputTag.Move");

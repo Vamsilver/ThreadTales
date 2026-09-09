@@ -13,6 +13,7 @@ class UThreadTalesInputConfig;
 class UNiagaraSystem;
 class USoundBase;
 class UAnimMontage;
+class UThreadTalesTraversalComponent;
 
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnHealthChangedDelegate, float, CurrentHealth, float, MaxHealth);
@@ -80,6 +81,10 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Equipment", meta = (AllowPrivateAccess = "true"))
 	class UThreadTalesEquipmentComponent* EquipmentComponent;
 
+	// Traversal Component
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Traversal", meta = (AllowPrivateAccess = "true"))
+	class UThreadTalesTraversalComponent* TraversalComponent;
+
 	/** Whether the character is currently alive */
 	UPROPERTY(ReplicatedUsing = OnRep_IsAlive, BlueprintReadOnly, Category = "ThreadTales|Health")
 	bool bIsAlive;
@@ -138,6 +143,14 @@ public:
 	/** Returns equipment component */
 	UFUNCTION(BlueprintPure, Category = "ThreadTales|Equipment")
 	class UThreadTalesEquipmentComponent* GetEquipmentComponent() const { return EquipmentComponent; }
+
+	/** Returns traversal component */
+	UFUNCTION(BlueprintPure, Category = "ThreadTales|Traversal")
+	class UThreadTalesTraversalComponent* GetTraversalComponent() const { return TraversalComponent; }
+
+	/** Requests releasing currently held ledge or traversal state (Drop) */
+	UFUNCTION(BlueprintCallable, Category = "ThreadTales|Traversal")
+	void RequestReleaseLedge();
 
 	/** Example variable to prove C++ connection */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ThreadTales|Stats")
