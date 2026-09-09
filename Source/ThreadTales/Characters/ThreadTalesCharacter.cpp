@@ -439,7 +439,7 @@ void AThreadTalesCharacter::Jump()
 {
 	if (TraversalComponent && TraversalComponent->IsLedgeClimbing())
 	{
-		TraversalComponent->ClimbUp();
+		TraversalComponent->HandleLedgeJumpInput();
 		return;
 	}
 

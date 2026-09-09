@@ -69,7 +69,31 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "ThreadTales|Traversal")
 	void StartLedgeClimb(const FVector& LedgeLocation, const FVector& WallNormal);
 
-	/** Initiates mantle/climb up onto the ledge (triggered by Jump while hanging) */
+	/** Handles jump input while hanging: evaluates upper ledge hop, side jump, or top mantle */
+	UFUNCTION(BlueprintCallable, Category = "ThreadTales|Traversal")
+	void HandleLedgeJumpInput();
+
+	/** Probes for a higher ledge directly above the current one */
+	UFUNCTION(BlueprintCallable, Category = "ThreadTales|Traversal")
+	bool FindUpperLedge(FVector& OutLedgeLoc, FVector& OutWallNormal);
+
+	/** Probes for adjacent ledge along wall tangent (-1 = Left, +1 = Right). If bForJump is true, probes for jump distance */
+	UFUNCTION(BlueprintCallable, Category = "ThreadTales|Traversal")
+	bool FindSideLedge(float DirectionSign, FVector& OutLedgeLoc, FVector& OutWallNormal, bool& bOutIsContinuous, bool bForJump = false);
+
+	/** Performs a hop to a higher ledge tier */
+	UFUNCTION(BlueprintCallable, Category = "ThreadTales|Traversal")
+	void HopUp(const FVector& TargetLedgeLoc, const FVector& TargetWallNormal);
+
+	/** Performs a jump across a gap to an adjacent ledge */
+	UFUNCTION(BlueprintCallable, Category = "ThreadTales|Traversal")
+	void SideJump(float DirectionSign, const FVector& TargetLedgeLoc, const FVector& TargetWallNormal);
+
+	/** Shifts position along a continuous ledge */
+	UFUNCTION(BlueprintCallable, Category = "ThreadTales|Traversal")
+	void StartShimmy(float DirectionSign, const FVector& TargetLedgeLoc, const FVector& TargetWallNormal);
+
+	/** Initiates mantle/climb up onto the ledge (triggered by Jump while hanging when no upper ledge exists) */
 	UFUNCTION(BlueprintCallable, Category = "ThreadTales|Traversal")
 	void ClimbUp();
 
@@ -82,6 +106,10 @@ protected:
 
 	/** Sets the traversal state locally and manages GAS tag */
 	void SetTraversalState(EThreadTalesTraversalState NewState);
+
+	/** Callback when mantle climb up montage begins blending out to locomotion */
+	UFUNCTION()
+	void OnClimbMontageBlendingOut(UAnimMontage* Montage, bool bInterrupted);
 
 	/** Callback when mantle climb up montage finishes */
 	UFUNCTION()
@@ -105,6 +133,24 @@ protected:
 
 	UFUNCTION(Server, Reliable)
 	void Server_ReleaseLedge();
+
+	UFUNCTION(Server, Reliable)
+	void Server_HopUp(const FVector& TargetLedgeLoc, const FVector& TargetWallNormal);
+
+	UFUNCTION(NetMulticast, Reliable)
+	void Multicast_HopUp(const FVector& TargetLedgeLoc, const FVector& TargetWallNormal);
+
+	UFUNCTION(Server, Reliable)
+	void Server_SideJump(float DirectionSign, const FVector& TargetLedgeLoc, const FVector& TargetWallNormal);
+
+	UFUNCTION(NetMulticast, Reliable)
+	void Multicast_SideJump(float DirectionSign, const FVector& TargetLedgeLoc, const FVector& TargetWallNormal);
+
+	UFUNCTION(Server, Reliable)
+	void Server_StartShimmy(float DirectionSign, const FVector& TargetLedgeLoc, const FVector& TargetWallNormal);
+
+	UFUNCTION(NetMulticast, Reliable)
+	void Multicast_StartShimmy(float DirectionSign, const FVector& TargetLedgeLoc, const FVector& TargetWallNormal);
 
 	UFUNCTION(NetMulticast, Reliable)
 	void Multicast_StartLedgeClimb(const FVector& LedgeLocation, const FVector& WallNormal);
@@ -187,6 +233,50 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "ThreadTales|Traversal|Montages")
 	TObjectPtr<UAnimMontage> HangMontage;
 
+	/** AnimMontage played when hopping up to a higher ledge */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "ThreadTales|Traversal|Montages")
+	TObjectPtr<UAnimMontage> ClimbHopUpMontage;
+
+	/** AnimMontage played when jumping across a gap to an adjacent ledge on the left */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "ThreadTales|Traversal|Montages")
+	TObjectPtr<UAnimMontage> ClimbJumpLeftMontage;
+
+	/** AnimMontage played when jumping across a gap to an adjacent ledge on the right */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "ThreadTales|Traversal|Montages")
+	TObjectPtr<UAnimMontage> ClimbJumpRightMontage;
+
+	/** AnimMontage played when shifting/shimmying left along a continuous ledge */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "ThreadTales|Traversal|Montages")
+	TObjectPtr<UAnimMontage> ShimmyLeftMontage;
+
+	/** AnimMontage played when shifting/shimmying right along a continuous ledge */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "ThreadTales|Traversal|Montages")
+	TObjectPtr<UAnimMontage> ShimmyRightMontage;
+
+	/** Minimum height above current ledge to detect upper ledge */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "ThreadTales|Traversal|MultiLedge")
+	float MinHopUpHeight;
+
+	/** Maximum height above current ledge to detect upper ledge */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "ThreadTales|Traversal|MultiLedge")
+	float MaxHopUpHeight;
+
+	/** Minimum gap distance for side jump */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "ThreadTales|Traversal|MultiLedge")
+	float MinSideJumpDistance;
+
+	/** Maximum gap distance for side jump */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "ThreadTales|Traversal|MultiLedge")
+	float MaxSideJumpDistance;
+
+	/** Distance to shift along ledge in one shimmy step */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "ThreadTales|Traversal|MultiLedge")
+	float ShimmyStepDistance;
+
+	/** Cooldown between consecutive shimmy steps (seconds) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "ThreadTales|Traversal|MultiLedge")
+	float ShimmyCooldownDuration;
+
 	/** Draw debug visual lines, spheres and normals for ledge detection */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ThreadTales|Traversal|Debug")
 	bool bDrawDebugTraces;
@@ -195,11 +285,28 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<AThreadTalesCharacter> CharacterOwner;
 
+	/** Starts smooth interpolated movement and plays the corresponding montage to target ledge */
+	void Internal_StartTransition(UAnimMontage* MontageToPlay, const FVector& TargetLedgeLoc, const FVector& TargetWallNormal, float CustomDuration = -1.0f);
+
 	/** Timestamp or timer tracking regrab cooldown */
 	float RegrabCooldownTimer;
 
 	/** True while climb up mantle montage is executing */
 	bool bIsClimbingUp;
+
+	/** True while transitioning between ledges (Hop Up, Side Jump, Shimmy) */
+	bool bIsTransitioning;
+	float TransitionTimer;
+	float TransitionDuration;
+	FVector TransitionStartLocation;
+	FRotator TransitionStartRotation;
+	FVector TransitionTargetLocation;
+	FRotator TransitionTargetRotation;
+	FVector PendingTargetLedgeLocation;
+	FVector PendingTargetWallNormal;
+
+	/** Cooldown between consecutive shimmy steps */
+	float ShimmyCooldownTimer;
 
 	/** Cached target ledge position and wall normal */
 	FVector CachedLedgeLocation;
