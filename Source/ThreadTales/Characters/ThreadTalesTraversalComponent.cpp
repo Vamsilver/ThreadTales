@@ -149,7 +149,7 @@ void UThreadTalesTraversalComponent::TickComponent(float DeltaTime, ELevelTick T
 			if (!bChainedShimmy)
 			{
 				ShimmyCooldownTimer = GetShimmyCooldownDuration();
-				ClimbingInputDebounceTimer = 0.35f;
+				ClimbingInputDebounceTimer = GetShimmyInputDebounceDuration();
 				CrossfadeToHangMontage();
 			}
 		}
@@ -280,49 +280,45 @@ UAnimMontage* UThreadTalesTraversalComponent::GetActiveHangMontage(bool bFreehan
 {
 	if (ClimbingConfig)
 	{
-		UAnimMontage* CfgMont = bFreehang ? ClimbingConfig->BarHangMontage.Get() : ClimbingConfig->HangMontage.Get();
-		if (CfgMont) return CfgMont;
+		return bFreehang ? ClimbingConfig->BarHangMontage.Get() : ClimbingConfig->HangMontage.Get();
 	}
-	return bFreehang ? BarHangMontage.Get() : HangMontage.Get();
+	return nullptr;
 }
 
 UAnimMontage* UThreadTalesTraversalComponent::GetActiveClimbOnTopMontage(bool bFreehang) const
 {
 	if (ClimbingConfig)
 	{
-		UAnimMontage* CfgMont = bFreehang ? ClimbingConfig->BarClimbOnTopMontage.Get() : ClimbingConfig->ClimbOnTopMontage.Get();
-		if (CfgMont) return CfgMont;
+		return bFreehang ? ClimbingConfig->BarClimbOnTopMontage.Get() : ClimbingConfig->ClimbOnTopMontage.Get();
 	}
-	return bFreehang ? BarClimbOnTopMontage.Get() : ClimbOnTopMontage.Get();
+	return nullptr;
 }
 
 UAnimMontage* UThreadTalesTraversalComponent::GetActiveClimbDownMontage(bool bFreehang) const
 {
 	if (ClimbingConfig)
 	{
-		UAnimMontage* CfgMont = bFreehang ? ClimbingConfig->BarClimbDownMontage.Get() : ClimbingConfig->ClimbDownMontage.Get();
-		if (CfgMont) return CfgMont;
+		return bFreehang ? ClimbingConfig->BarClimbDownMontage.Get() : ClimbingConfig->ClimbDownMontage.Get();
 	}
-	return bFreehang ? BarClimbDownMontage.Get() : ClimbDownMontage.Get();
+	return nullptr;
 }
 
 UAnimMontage* UThreadTalesTraversalComponent::GetActiveBackJumpMontage() const
 {
-	if (ClimbingConfig && ClimbingConfig->ClimbBackJumpMontage)
+	if (ClimbingConfig)
 	{
 		return ClimbingConfig->ClimbBackJumpMontage.Get();
 	}
-	return ClimbBackJumpMontage.Get();
+	return nullptr;
 }
 
 UAnimMontage* UThreadTalesTraversalComponent::GetActiveShimmyMontage(bool bLeft) const
 {
 	if (ClimbingConfig)
 	{
-		UAnimMontage* CfgMont = bLeft ? ClimbingConfig->ShimmyLeftMontage.Get() : ClimbingConfig->ShimmyRightMontage.Get();
-		if (CfgMont) return CfgMont;
+		return bLeft ? ClimbingConfig->ShimmyLeftMontage.Get() : ClimbingConfig->ShimmyRightMontage.Get();
 	}
-	return bLeft ? ShimmyLeftMontage.Get() : ShimmyRightMontage.Get();
+	return nullptr;
 }
 
 float UThreadTalesTraversalComponent::GetHangWallOffset() const { return ClimbingConfig ? ClimbingConfig->HangWallOffset : 24.0f; }
@@ -1113,13 +1109,13 @@ void UThreadTalesTraversalComponent::ProcessClimbingInput(float DeltaTime)
 			FVector TargetStandingLoc;
 			if (CanClimbUp(TargetStandingLoc))
 			{
-				ClimbingInputDebounceTimer = 0.4f;
+				ClimbingInputDebounceTimer = GetJumpInputDebounceDuration();
 				ClimbUp();
 				return;
 			}
 		}
 
-		ClimbingInputDebounceTimer = 0.2f;
+		ClimbingInputDebounceTimer = GetJumpInputDebounceDuration();
 		return;
 	}
 
