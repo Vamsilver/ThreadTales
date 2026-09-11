@@ -435,11 +435,50 @@ void AThreadTalesCharacter::RequestReleaseLedge()
 	}
 }
 
+bool AThreadTalesCharacter::TryClimbDown()
+{
+	if (TraversalComponent)
+	{
+		return TraversalComponent->TryClimbDown();
+	}
+	return false;
+}
+
+void AThreadTalesCharacter::Crouch(bool bClientSimulation)
+{
+	if (TraversalComponent)
+	{
+		if (TraversalComponent->IsLedgeClimbing())
+		{
+			TraversalComponent->ReleaseLedge();
+			return;
+		}
+		else if (TraversalComponent->TryClimbDown())
+		{
+			return;
+		}
+	}
+
+	Super::Crouch(bClientSimulation);
+}
+
+void AThreadTalesCharacter::AddMovementInput(FVector WorldDirection, float ScaleValue, bool bForce)
+{
+	if (TraversalComponent && TraversalComponent->IsLedgeClimbing())
+	{
+		// Suppress feeding movement input into CharacterMovement / Mover while climbing on ledge.
+		// TraversalComponent handles direct WASD climbing navigation.
+		return;
+	}
+
+	Super::AddMovementInput(WorldDirection, ScaleValue, bForce);
+}
+
 void AThreadTalesCharacter::Jump()
 {
 	if (TraversalComponent && TraversalComponent->IsLedgeClimbing())
 	{
-		TraversalComponent->HandleLedgeJumpInput();
+		TraversalComponent->HandleLedgeJumpInput(true);
 		return;
 	}
 

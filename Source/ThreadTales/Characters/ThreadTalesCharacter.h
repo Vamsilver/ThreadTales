@@ -152,6 +152,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "ThreadTales|Traversal")
 	void RequestReleaseLedge();
 
+	/** Attempts to mantle down / climb down from standing at platform edge into hanging */
+	UFUNCTION(BlueprintCallable, Category = "ThreadTales|Traversal")
+	bool TryClimbDown();
+
 	/** Example variable to prove C++ connection */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ThreadTales|Stats")
 	float MaxHealth;
@@ -245,8 +249,14 @@ public:
 	UPROPERTY(Transient)
 	bool bHasDoubleJumpedInAir;
 
+	/** Overridden from APawn to isolate climbing movement from standard locomotion */
+	virtual void AddMovementInput(FVector WorldDirection, float ScaleValue = 1.0f, bool bForce = false) override;
+
 	/** Overridden from ACharacter to trigger double jump directly when jumping in air */
 	virtual void Jump() override;
+
+	/** Overridden from ACharacter to support mantle-down / drop from ledge via crouch */
+	virtual void Crouch(bool bClientSimulation = false) override;
 	virtual void Landed(const FHitResult& Hit) override;
 
 	/** Overridden from ACharacter to ensure air jumps in GASP trigger OnJumped reliably */
