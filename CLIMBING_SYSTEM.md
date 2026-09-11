@@ -256,12 +256,15 @@ CachedHangLocation = TrueLedgeEdge + (WallNormal2D * HangWallOffset) - FVector(0
 | `MaxGrabVelocityZ` | `float` | `400.0 см/с` | Допустимая вертикальная скорость подъёма для захвата уступа |
 | `LedgeProbeDepths` | `TArray<float>` | `{ 5.0, 12.0, 20.0 } см` | Многоуровневые глубины зондирования верхней плоскости полки |
 | `MaxGrabWallDistance` | `float` | `55.0 см` | Максимальная дистанция до стены в момент хвата (защита от телепортации) |
+| `LedgeSlopeMaxZDifference` | `float` | `25.0 см` | Максимально допустимый перепад высоты между левой и правой ладонью |
+| `LedgeHandsProbeDepth` | `float` | `8.0 см` | Глубина зондирования поверхности под ладонями вглубь полки |
+| `LedgeHandsVerticalRange` | `float` | `15.0 см` | Вертикальный полудиапазон лучей под левой и правой ладонью |
 
 ### 12.2 Оффсеты виса (`ThreadTales|Traversal|Offsets`)
 | Переменная | Тип | Дефолт | Назначение |
 |---|---|---|---|
 | `HangWallOffset` | `float` | `24.0 см` | Расстояние от центра капсулы до внешней стены при висе |
-| `HangHeightOffset` | `float` | `73.0 см` | Смещение капсулы вниз от кромки уступа (кисти рук строго на полке) |
+| `HangHeightOffset` | `float` | `70.0 см` | Смещение капсулы вниз от кромки уступа (пальцы и ладони чисто на полке без врезания в геометрию) |
 
 ### 12.3 Валидация кромки и свободного пространства (`ThreadTales|Traversal|Validation`)
 | Переменная | Тип | Дефолт | Назначение |
@@ -272,7 +275,49 @@ CachedHangLocation = TrueLedgeEdge + (WallNormal2D * HangWallOffset) - FVector(0
 | `BodyClearanceRadius` | `float` | `20.0 см` | Радиус сферы проверки пространства для головы и торса |
 | `BodyClearanceHeight` | `float` | `40.0 см` | Высота проверки пространства над точкой виса |
 
-### 12.4 Боковое перемещение (Shimmy) (`ThreadTales|Traversal|MultiLedge|Shimmy`)
+### 12.4 Свободный вис (`ThreadTales|Traversal|Freehang`)
+| Переменная | Тип | Дефолт | Назначение |
+|---|---|---|---|
+| `bAllowFreehang` | `bool` | `true` | Разрешить захват узких балок и перил без стены под кромкой |
+| `FreehangWallCheckDepth` | `float` | `70.0 см` | Глубина проверки стены под уступом (уровень упора ног/коленей) |
+| `FreehangWallTraceForward` | `float` | `35.0 см` | Дистанция начала луча перед стеной |
+| `FreehangWallTraceBack` | `float` | `25.0 см` | Дистанция проникновения луча вглубь стены |
+
+### 12.5 Механика спуска (`ThreadTales|Traversal|ClimbDown`)
+| Переменная | Тип | Дефолт | Назначение |
+|---|---|---|---|
+| `ClimbDownTraceDistance` | `float` | `70.0 см` | Дистанция поиска кромки перед/под ногами для спуска |
+| `ClimbDownRootMotionForwardOffset` | `float` | `72.2 см` | Горизонтальное смещение Root Motion монтажа спуска |
+| `ClimbDownRootMotionDownwardOffset` | `float` | `171.32 см` | Вертикальное смещение Root Motion монтажа спуска |
+| `ClimbDownFloorTraceForwardDist` | `float` | `8.0 см` | Смещение луча пола вглубь стены при поиске кромки |
+| `ClimbDownFloorTraceZRange` | `float` | `35.0 см` | Вертикальный полудиапазон луча поиска пола у края платформы |
+| `ClimbDownEdgeLipDepth` | `float` | `8.0 см` | Глубина под верхней кромкой для засечки XY плоскости стены |
+| `ClimbDownEdgeLipProbeRange` | `float` | `25.0 см` | Диапазон горизонтального встречного луча засечки кромки XY |
+| `ClimbDownMinApproachDot` | `float` | `0.25` | Минимальный угол взгляда/движения к обрыву для детекции спуска |
+
+### 12.6 Подъем на уступ / Mantle (`ThreadTales|Traversal|Mantle`)
+| Переменная | Тип | Дефолт | Назначение |
+|---|---|---|---|
+| `MantleStandCapsuleRadius` | `float` | `31.0 см` | Радиус тестовой капсулы проверки стоячего места |
+| `MantleStandCapsuleHalfHeight` | `float` | `82.0 см` | Полувысота тестовой капсулы стоячего места |
+| `MantleStandForwardOffset` | `float` | `40.0 см` | Смещение точки приземления вглубь платформы от кромки |
+| `MantleStandUpOffset` | `float` | `5.0 см` | Приподнятие над уровнем пола при проверке свободного места |
+| `MantleWallContinuityProbeDepth` | `float` | `15.0 см` | Глубина луча проверки целостности пола под ногами |
+
+### 12.7 Отскок от стены и прыжок назад (`ThreadTales|Traversal|WallEject`)
+| Переменная | Тип | Дефолт | Назначение |
+|---|---|---|---|
+| `WallEjectSectorHalfAngle` | `float` | `45.0°` | Полусектор веерного сканирования встречных уступов за спиной |
+| `WallEjectSectorRayCount` | `int32` | `7` | Количество веерных лучей сканирования сектора |
+| `WallEjectMinOpposingHeight` | `float` | `-100.0 см` | Нижняя граница высоты встречного уступа |
+| `WallEjectMaxOpposingHeight` | `float` | `150.0 см` | Верхняя граница высоты встречного уступа |
+| `WallEjectNormalToleranceDot` | `float` | `-0.7` | Допустимая параллельность встречной стены |
+| `WallEjectRegrabCooldown` | `float` | `0.55 с` | Защитный кулдаун повторного зацепа после отскока |
+| `BackJumpOpposingLedgeDistance` | `float` | `450.0 см` | Максимальная дистанция зондирования встречного уступа сзади |
+| `WallEjectHorizontalSpeed` | `float` | `450.0 см/с` | Горизонтальный импульс отталкивания от стены при отскоке |
+| `WallEjectVerticalSpeed` | `float` | `350.0 см/с` | Вертикальный импульс подъема при отскоке от стены |
+
+### 12.8 Боковое перемещение (Shimmy) (`ThreadTales|Traversal|MultiLedge|Shimmy`)
 | Переменная | Тип | Дефолт | Назначение |
 |---|---|---|---|
 | `ShimmyStepDistance` | `float` | `67.0 см` | Дистанция одного шага вдоль кромки (рут-моушен `MD_Shimmy`) |
@@ -281,7 +326,7 @@ CachedHangLocation = TrueLedgeEdge + (WallNormal2D * HangWallOffset) - FVector(0
 | `ShimmyVerticalTraceRange` | `float` | `20.0 см` | Вертикальное полуокно сканирования верхней грани полки |
 | `ShimmyMaxZDifference` | `float` | `20.0 см` | Допустимый перепад высоты полки для продолжения шимми |
 
-### 12.5 Зондирование направленных прыжков (`ThreadTales|Traversal|MultiLedge|Probing`)
+### 12.9 Зондирование направленных прыжков (`ThreadTales|Traversal|MultiLedge|Probing`)
 | Переменная | Тип | Дефолт | Назначение |
 |---|---|---|---|
 | `DirectionalProbeDepths` | `TArray<float>` | `{ 4.0, 8.0, 16.0 } см`| Глубины проникновения в уступ при сканировании сектора |
@@ -292,7 +337,7 @@ CachedHangLocation = TrueLedgeEdge + (WallNormal2D * HangWallOffset) - FVector(0
 | `DiagonalUpJumpTopTraceOffset` | `float` | `50.0 см` | Высота начала опускающегося луча при прыжке по диагонали вверх |
 | `DiagonalDownJumpTopTraceOffset` | `float` | `25.0 см` | Высота начала опускающегося луча при прыжке по диагонали вниз |
 
-### 12.6 Кинематика и задержки ввода (`ThreadTales|Traversal|Kinematics`)
+### 12.10 Кинематика и задержки ввода (`ThreadTales|Traversal|Kinematics`)
 | Переменная | Тип | Дефолт | Назначение |
 |---|---|---|---|
 | `ShortJumpDuration` | `float` | `0.95 с` | Полная длительность кинематического цикла короткого прыжка |
@@ -301,11 +346,11 @@ CachedHangLocation = TrueLedgeEdge + (WallNormal2D * HangWallOffset) - FVector(0
 | `JumpFlightEndRatio` | `float` | `0.85` | Доля цикла, в которой завершается полёт и руки берут уступ |
 | `ShimmyInputDebounceDuration` | `float` | `0.15 с` | Защитный интервал ввода после шага шимми |
 | `JumpInputDebounceDuration` | `float` | `0.35 с` | Защитный интервал ввода после направленного прыжка |
-| `WallEjectHorizontalSpeed` | `float` | `450.0 см/с` | Горизонтальный импульс отталкивания от стены при отскоке |
-| `WallEjectVerticalSpeed` | `float` | `350.0 см/с` | Вертикальный импульс подъема при отскоке от стены |
-| `BackJumpOpposingLedgeDistance` | `float` | `450.0 см` | Максимальная дистанция зондирования встречного уступа сзади |
+| `ClimbBackJumpPlayRate` | `float` | `1.35` | Множитель скорости проигрывания отскока от стены |
+| `ClimbAnimPlayRateMultiplier` | `float` | `1.0` | Глобальный множитель скорости проигрывания монтажей |
+| `RegrabCooldownDuration` | `float` | `1.5 с` | Минимальное время кулдауна до повторного захвата уступа после сброса |
 
-### 12.7 Монтажи и режимы лазания (`ThreadTales|Traversal|Montages`)
+### 12.11 Монтажи и режимы лазания (`ThreadTales|Traversal|Montages`)
 | Переменная | Тип | Ассет по умолчанию | Назначение |
 |---|---|---|---|
 | `ClimbDownMontage` | `UAnimMontage*` | `MD_climb_down_Montage1` | Спуск с платформы в вис со стеной под ногами |
@@ -313,12 +358,6 @@ CachedHangLocation = TrueLedgeEdge + (WallNormal2D * HangWallOffset) - FVector(0
 | `BarHangMontage` | `UAnimMontage*` | `MD_bar_hang_idle1_Montage` | Свободный вис на руках без стены под ногами |
 | `BarClimbOnTopMontage` | `UAnimMontage*` | `MD_bar_climb_up_ALS_Montage1` | Силовой подъем (Muscle-up) на перекладину/балку |
 | `ClimbBackJumpMontage` | `UAnimMontage*` | `MD_leap_short_r_back1_Montage` | Прыжок назад / Отскок от стены с отталкиванием ногами |
-
-### 12.8 Общие настройки (`ThreadTales|Traversal|Tuning`)
-| Переменная | Тип | Дефолт | Назначение |
-|---|---|---|---|
-| `bAllowFreehang` | `bool` | `true` | Разрешить захват узких балок и перил без стены под кромкой |
-| `ClimbDownTraceDistance` | `float` | `70.0 см` | Дистанция поиска кромки перед/под ногами для спуска |
 
 ---
 
@@ -332,7 +371,10 @@ CachedHangLocation = TrueLedgeEdge + (WallNormal2D * HangWallOffset) - FVector(0
   3. Горизонтальный обратный луч под уровнем пола находит внешнюю грань стены (`WallHit`).
   4. Опускающийся луч находит точную кромку уступа $Z$.
   5. Проверяется проходимость тела (`ValidateLedgeLipAndClearance`).
-  6. Персонаж разворачивается лицом к стене, проигрывается `ClimbDownMontage` (или `BarClimbDownMontage`), рут-моушен плавно опускает тело, и происходит переход в `LedgeClimbing`.
+  6. Выполняется математическое предварительное позиционирование (Pre-Alignment): персонаж разворачивается лицом к обрыву (`+WallNormal2D`) и ставится в точку за 72.2 см от точки виса (строго под смещение рут-моушена анимации: `CachedHangLocation.XY - (WallNormal2D * 72.2f)` и `CachedHangLocation.Z + 171.32f`).
+  7. Капсула временно игнорирует коллизию `ECC_WorldStatic` и `ECC_WorldDynamic` (`SetClimbDownCollision(true)`), что позволяет капсуле радиусом 50 см беспрепятственно пройти угол кромки пола и опуститься на 171.32 см вниз.
+  8. Воспроизводится `ClimbDownMontage` (или `BarClimbDownMontage`). Персонаж делает шаг назад/переворот на 180°, опускается в вис, и рут-моушен приводит капсулу ровно в точку виса (`CachedHangLocation`) с нулевым смещением и без застревания в воздухе.
+  9. В момент Blend Out / End коллизия немедленно восстанавливается, и управление мягко переходит в зацикленный `HangMontage`.
 
 ### 13.2 Back Jump & Wall Eject (Прыжок назад / Отскок от стены)
 - **Управление:** При висе на уступе нажать `S + Space` (направление от стены + прыжок).
@@ -365,5 +407,108 @@ CachedHangLocation = TrueLedgeEdge + (WallNormal2D * HangWallOffset) - FVector(0
 3. **Управление спрыгиванием (Drop ONLY on C):**
    - Нажатие `S` при висе на уступе никогда не сбрасывает персонажа со стены (позволяет надежно прожимать `S + Space` для Back Jump).
    - Спрыгивание со стены выполняется **строго клавишей приседания `C`** (Crouch).
+
+---
+
+## 14. Архитектура компонента: Машина подсостояний и Data-Driven Jump Table
+
+### 14.1 Машина подсостояний (`EThreadTalesClimbingSubState`)
+Внутри состояния `EThreadTalesTraversalState::LedgeClimbing` управление поведением персонажа передано строгой машине подсостояний (Single Source of Truth), полностью заменившей разрозненные булевы флаги:
+
+| Подсостояние | Значение | Описание |
+|---|---|---|
+| `None` | 0 | Вне режима скалолазания или в процессе отпускания уступа |
+| `IdleHang` | 1 | Стабильный вис на уступе (Braced или Freehang). Готов к приему ввода прыжков, шимми или залезания |
+| `Shimmying` | 2 | Непрерывное горизонтальное смещение вдоль непрерывного карниза |
+| `JumpTransition` | 3 | Кинематический 3-фазный прыжок к смежному уступу (Short, Long, Leap) |
+| `MantleUp` | 4 | Залезание на платформу по Root Motion |
+| `ClimbDown` | 5 | Спуск с платформы в вис по Root Motion |
+
+**Преимущества архитектуры:**
+- Исключены конфликты и рассинхроны: персонаж математически не может одновременно находиться в прыжке и залезать наверх.
+- Все проверки гардов сведены к лаконичному `ClimbingSubState == EThreadTalesClimbingSubState::IdleHang`.
+
+### 14.2 Data-Driven конфигурация прыжков (`FThreadTalesLedgeJumpConfig` & `JumpConfigTable`)
+Все параметры 8 направлений прыжков по 3 категориям дистанций (Short, Long, Leap) сведены в единую внутреннюю структуру и матрицу быстрого доступа:
+
+```cpp
+USTRUCT(BlueprintType)
+struct FThreadTalesLedgeJumpConfig
+{
+    UPROPERTY(EditDefaultsOnly, BlueprintReadWrite)
+    TObjectPtr<UAnimMontage> Montage = nullptr;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadWrite)
+    float MinDistance = 0.0f;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadWrite)
+    float MaxDistance = 0.0f;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadWrite)
+    float NominalDistance = 48.1f;
+};
+```
+
+- **Быстрый доступ $O(1)$:** `JumpConfigTable[Direction][DistanceType]` компилируется при `BeginPlay()`, разрешая все цепочки fallback (диагональ $\to$ горизонталь $\to$ вертикаль; Leap $\to$ Long $\to$ Short) один раз на старте.
+- **Устранение дублирования:** Запросы монтажей, диапазонов и номинальных дистанций сокращены с более чем 600 строк громоздких `switch-case` блоков до прямых запросов по индексу.
+- **100% обратная совместимость:** Все индивидуальные свойства `UPROPERTY` в редакторе сохранены, гарантируя полную целостность сериализации в `BP_ThreadTalesCharacter`.
+
+### 14.3 Полное разделение конфигурации (Архитектура `UThreadTalesClimbingConfig` Data Asset)
+В соответствии со стандартом чистой модульной архитектуры выполнено 100% разделение ответственности между физическим детектом мира и параметрами персонажа:
+
+- **C++ класс:** `UThreadTalesClimbingConfig : public UDataAsset` (`Source/ThreadTales/Characters/ThreadTalesClimbingConfig.h`).
+- **Свойство в компоненте:** `UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ThreadTales|Traversal|Config") TObjectPtr<UThreadTalesClimbingConfig> ClimbingConfig;`.
+- **Созданный эталонный ассет:** `/Game/Blueprints/DA_ClimbingConfig_Default` (полностью заполнен всеми 33 монтажами и точными калибровочными значениями).
+
+#### Разделение зон ответственности:
+1. **В Data Asset (`UThreadTalesClimbingConfig`):** вынесены **все свойства, зависящие от анимаций и анатомии персонажа**:
+   - **Все 33 монтажа:** базовые (Hang, BarHang, ClimbOnTop, BarClimbOnTop, ClimbDown, BarClimbDown, BackJump, ShimmyL/R) и направленные прыжки (Short, Long, Leap для 8 направлений).
+   - **Offsets:** `HangWallOffset`, `HangHeightOffset`.
+   - **Playback:** `ClimbAnimPlayRateMultiplier`, `ClimbBackJumpPlayRate`.
+   - **Kinematics:** `ShortJumpDuration`, `LongJumpDuration`, `LeapJumpDuration`, `JumpFlightEndRatio`, `JumpArcPeakTime`, `JumpArcHeight`, `LeapJumpArcPeakTime`, `LeapJumpArcHeight`.
+   - **Distance Bounds:** Все 24 диапазона для Short, Long и Leap прыжков.
+   - **Shimmy:** `ShimmyStepDistance`, `ShimmyCooldownDuration`, `ShimmyProbeDepths`, `ShimmyVerticalTraceRange`, `ShimmyMaxZDifference`, `ShimmyInputDebounceDuration`.
+   - **Climb Down:** `ClimbDownStepBackDistance`, `ClimbDownDownwardTraceDepth`, `ClimbDownRootMotionForwardOffset`, `ClimbDownRootMotionDownwardOffset`, `ClimbDownMinApproachDot`.
+   - **Mantle:** `MantleStandCapsuleRadius`, `MantleStandCapsuleHalfHeight`, `MantleStandForwardOffset`, `MantleStandUpOffset`, `MantleWallContinuityProbeDepth`.
+   - **Wall Eject & Back Jump:** `WallEjectHorizontalSpeed`, `WallEjectVerticalSpeed`, `WallEjectSectorHalfAngle`, `WallEjectSectorRayCount`, `WallEjectMinOpposingHeight`, `WallEjectMaxOpposingHeight`, `WallEjectNormalToleranceDot`, `WallEjectRegrabCooldown`, `BackJumpOpposingLedgeDistance`.
+
+2. **В Data Asset также вынесены все параметры зондирования физического мира (Sensing & World Detection):**
+   - Детекция: `ForwardTraceDistance`, `ForwardTraceZOffset`, `LedgeDownTraceHeight`, `LedgeDownTraceDepth`, `MinGrabHeight`, `MaxGrabHeight`, `HandSpacing`, `MaxApproachAngle`, `MaxGrabVelocityZ`, `LedgeProbeDepths`, `MaxGrabWallDistance`, `LedgeSlopeMaxZDifference`, `LedgeHandsProbeDepth`, `LedgeHandsVerticalRange`.
+   - Валидация: `LipBelowWallTraceDepth`, `LipAboveAirTraceHeight`, `LipModularSeamRejectDistance`, `BodyClearanceRadius`, `BodyClearanceHeight`.
+   - Freehang и ClimbDown: `RegrabCooldownDuration`, `bAllowFreehang`, `ClimbDownTraceDistance`, `FreehangWallCheckDepth`, `FreehangWallTraceForward`, `FreehangWallTraceBack`, `ClimbDownFloorTraceForwardDist`, `ClimbDownFloorTraceZRange`, `ClimbDownEdgeLipDepth`, `ClimbDownEdgeLipProbeRange`.
+   - Multi-Ledge Probing: `DirectionalProbeDepths`, вертикальные оффсеты верхнего трейса (`UpJumpTopTraceOffset` и др.).
+
+3. **В панели Details компонента (`ThreadTalesTraversalComponent`):**
+   - Отображаются **ИСКЛЮЧИТЕЛЬНО два свойства**:
+     - `Config -> Climbing Config` (слот для назначения Data Asset `DA_ClimbingConfig_Default`).
+     - `Debug -> Draw Debug Traces` (флаг визуализации трейсов).
+   - Все остальные свойства переведены во внутренние члены `UPROPERTY()` без `EditDefaultsOnly` для обеспечения 100% обратной совместимости и внутренних fallback-дефолтов.
+
+4. **Resolver Getters и Fallback-механизм:**
+   - Внутри `ThreadTalesTraversalComponent` созданы 38 типизированных геттеров-резольверов (`GetForwardTraceDistance()`, `GetMinGrabHeight()`, `GetHangWallOffset()`, `GetShimmyStepDistance()`, `GetJumpFlightEndRatio()` и т.д.).
+   - При наличии назначенного `ClimbingConfig` данные берутся напрямую из Data Asset.
+   - Если `ClimbingConfig == nullptr`, система прозрачно обращается к внутренним переменным компонента (`UPROPERTY()`), гарантируя 100% стабильность работы.
+
+### 14.4 Модульная C++ архитектура Traversal системы (Разделение монолита)
+Для исключения проблемы «God Component» код разделен на 3 специализированных подсистемы:
+
+1. **`ThreadTalesTraversalTypes.h`:**
+   - Изолированный заголовок типов, перечислений (`EThreadTalesTraversalState`, `EThreadTalesClimbingSubState`, `EThreadTalesLedgeJumpDirection`, `EThreadTalesLedgeJumpDistanceType`) и структуры `FThreadTalesLedgeJumpConfig`.
+
+2. **`FThreadTalesLedgeDetector` (`ThreadTalesLedgeDetector.h / .cpp`):**
+   - Выделенный модуль пространственного зондирования и физических коллизий мира.
+   - Содержит всю низкоуровневую логику: `DetectLedge`, `TraceForwardWall`, `ProbeLedgeTopSurface`, `ValidateLedgeLipAndClearance`, `ValidateLedgeHandsPlacement`, `CheckIsFreehangLedge`, `FindUpperLedge`, `FindSideLedge`, `FindLedgeInDirection`, `FindEdgeForClimbDown`, `CanClimbUp`.
+   - Полностью отвязан от сетевой репликации и GAS.
+
+3. **`FThreadTalesClimbingKinematics` & `FThreadTalesJumpConfigTable` (`ThreadTalesClimbingKinematics.h / .cpp`):**
+   - Выделенный модуль кинематики переходов и прыжковых таблиц.
+   - Содержит компиляцию fallback-цепочек прыжков `[9][3]`, расчет параболических траекторий и сглаживания смещений (`CalculateTransitionTransform`), расчет импульса отскока от стены (`CalculateWallEjectVelocity`) и начального позиционирования спуска (`CalculateClimbDownPreAlignment`).
+
+4. **`UThreadTalesTraversalComponent` (`ThreadTalesTraversalComponent.h / .cpp`):**
+   - Сокращен с 3430 до ~730 строк.
+   - Является чистым координатором состояний, сетевых RPC (Server/Multicast), обработки ввода (Input) и GAS-тегов.
+   - Предоставляет стабильный фасад для Blueprint API без ломки существующих ссылок.
+
+
 
 
