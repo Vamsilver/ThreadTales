@@ -34,27 +34,32 @@
            ┌──────────────────────┐
            │         None         │
            └──────────┬───────────┘
-                      │ (Автозахват в воздухе / ClimbDown с крыши)
+                      │ (Автозахват в воздухе)
                       ▼
-             ┌─────────────────┐
-    ┌───────►│    IdleHang     │◄──────┐
-    │        └─┬──────┬──────┬─┘       │
-    │ (Blend)  │      │      │ (Blend) │
-    │          ▼      ▼      ▼         │
-┌───┴──────────┐ ┌─────────┐ ┌─────────┴─────────┐
-│JumpTransition│ │Shimmying│ │    ClimbDown      │
-└──────────────┘ └─────────┘ └───────────────────┘
-       │               │
-       │               │ (A/D у края стены без непрерывного уступа)
-       │               ▼
-       │      ┌──────────────────┐
-       │      │ CornerTransition │ ──► (двухсегм. дуга Start→Pivot→Target)
-       │      └──────────────────┘
-       │               │ (W / Space у вершины)
-       ▼               ▼
-  ┌─────────┐  ┌─────────┐
-  │MantleUp │  │MantleUp │ ──► (Выход на ноги в MOVE_Walking)
-  └─────────┘  └─────────┘
+           ┌──────────────────────┐
+           │      GrabCatch       │
+           └──────────┬───────────┘
+                      │ (Плавное подтягивание EaseOut 0.20с / Grab Montage)
+                      ▼
+              ┌─────────────────┐
+     ┌───────►│    IdleHang     │◄──────┐
+     │        └─┬──────┬──────┬─┘       │
+     │ (Blend)  │      │      │ (Blend) │
+     │          ▼      ▼      ▼         │
+ ┌───┴──────────┐ ┌─────────┐ ┌─────────┴─────────┐
+ │JumpTransition│ │Shimmying│ │    ClimbDown      │
+ └──────────────┘ └─────────┘ └───────────────────┘
+        │               │
+        │               │ (A/D у края стены без непрерывного уступа)
+        │               ▼
+        │      ┌──────────────────┐
+        │      │ CornerTransition │ ──► (двухсегм. дуга Start→Pivot→Target)
+        │      └──────────────────┘
+        │               │ (W / Space у вершины)
+        ▼               ▼
+   ┌─────────┐  ┌─────────┐
+   │MantleUp │  │MantleUp │ ──► (Выход на ноги в MOVE_Walking)
+   └─────────┘  └─────────┘
 ```
 
 | Подсостояние | Значение | Описание |
@@ -66,6 +71,7 @@
 | `MantleUp` | 4 | Залезание на платформу по Root Motion |
 | `ClimbDown` | 5 | Спуск с платформы в вис по Root Motion |
 | `CornerTransition` | 6 | Огибание внешнего/внутреннего угла стены: двухсегментная дуга `Start → CornerPivot → Target` |
+| `GrabCatch` | 7 | Кинематическое подтягивание к стене из воздуха (0.20с) и динамический зацеп |
 
 ---
 
@@ -73,12 +79,13 @@
 
 | Действие игрока | Клавиша | Поведение системы |
 |---|---|---|
-| **Автозахват** | В воздухе при подлёте к стене | При `Velocity.Z <= 400 см/с` хватает найденный уступ |
+| **Автозахват** | В воздухе при подлёте к стене | Захват уступа на дистанции вытянутых рук ($\le 85\text{ см}$) на скорости $V_z \le 750\text{ см/с}$ с мягким подтягиванием `GrabCatch` (0.20с) |
 | **Подъем на крышу (Mantle)** | `Space` / `W` (у края крыши) | Залезание на ноги через Root Motion (`MD_climb_up_ALS1_Montage`) |
 | **Прыжок вверх (Hop Up)** | `Space` / `W` (есть уступ выше) | Прыжок на верхний ярус уступа |
 | **Перебор рук (Shimmy)** | Удержание `A` или `D` | Шаги вдоль непрерывной полки с кулдауном 0.55с |
 | **Огибание угла (Corner Wrap)** | `A` или `D` у края стены | Если `FindSideLedge=false` и `ProbeCornerLedge=true` — двухсегментный угловой переход |
 | **Прыжок в сторону** | `A + Space` / `D + Space` | Прыжок на соседний блок/уступ через разрыв стены |
+| **Прыжок по конусу (Radial Jump)** | Направление ввода + `Space` | 3D Radial Scanner (`FindBestLedgeInCone`): объемный поиск уступов под любыми углами в 3D (рейки, настенные планки, диагонали) |
 | **Прыжок назад / Отскок** | `S + Space` (или `Shift + S`) | Поиск встречного уступа сзади. Если найден — прыжок назад; если нет — отскок `WallEject` |
 | **Спуск с края крыши** | `C` (стоя у кромки пола) | Плавный разворот на 180° и спуск в вис на руках |
 | **Спрыгивание со стены** | **Строго `C` (Crouch)** | Сброс виса, переход в падение, кулдаун повторного зацепа 1.5с |
@@ -109,6 +116,7 @@
 | **Back Jump / Opposing Leap** | `ClimbBackJumpMontage` | `BarClimbBackJumpMontage` |
 | **Hop Up / Hop Down** | `JumpConfigTable` (Short Up/Down) | `BarClimbHopUpMontage` / `BarClimbHopDownMontage` |
 | **Jump Left / Jump Right** | `JumpConfigTable` (Short Left/Right) | `BarClimbJumpLeftMontage` / `BarClimbJumpRightMontage` |
+| **Grab From Air** | `GrabFromAirMontage` | `BarGrabFromAirMontage` |
 
 ### Иерархический Fallback (Безопасность конфигурации)
 Если для какого-либо действия Freehang-монтаж не назначен (`nullptr`) в Data Asset:
@@ -116,6 +124,7 @@
 2. `GetActiveShimmyMontage(bLeft, bFreehang)` возвращает `ShimmyLeftMontage` / `ShimmyRightMontage`.
 3. `GetActiveCornerMontage(bLeft, CornerType, bFreehang)` сначала проверяет Freehang Corner, затем Braced Corner, и в итоге откатывается на `GetActiveShimmyMontage(bLeft, bFreehang)`.
 4. `GetJumpMontage(Direction, DistanceType, bFreehang)` для `Short` дистанций берет Freehang прыжок/подскок; если он не задан — берет монтаж из `FThreadTalesJumpConfigTable`.
+5. `GetActiveGrabMontage(bFreehang)` проверяет Freehang зацеп, затем Braced зацеп; если оба `nullptr` — кинематическое подтягивание выполняется за `GrabCatchDuration` напрямую в `HangMontage` без рывка.
 Это гарантирует отсутствие сбоев и зависаний даже при частичной настройке ассетов в Data Asset.
 
 ---
