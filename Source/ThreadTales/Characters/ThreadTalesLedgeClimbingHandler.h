@@ -93,7 +93,8 @@ public:
 	{
 		return ClimbingSubState == EThreadTalesClimbingSubState::JumpTransition
 			|| ClimbingSubState == EThreadTalesClimbingSubState::Shimmying
-			|| ClimbingSubState == EThreadTalesClimbingSubState::CornerTransition;
+			|| ClimbingSubState == EThreadTalesClimbingSubState::CornerTransition
+			|| ClimbingSubState == EThreadTalesClimbingSubState::GrabCatch;
 	}
 	bool IsFreehang() const { return bIsFreehang; }
 	void SetIsFreehang(bool bInFreehang) { bIsFreehang = bInFreehang; }
@@ -123,6 +124,7 @@ private:
 	bool bIsFreehang;
 	bool bSavedUseControllerDesiredRotation;
 	bool bSavedOrientRotationToMovement;
+	bool bSavedUseControllerRotationYaw;
 
 	// Cached Anchors
 	FVector CachedLedgeLocation;
@@ -154,6 +156,7 @@ private:
 	float RegrabCooldownTimer;
 	float ClimbingInputDebounceTimer;
 	float ShimmyCooldownTimer;
+	float ContinuousScanThrottleTimer;
 
 	// Directional jump table lookup
 	FThreadTalesJumpConfigTable JumpConfigTable;

@@ -13,6 +13,7 @@ UThreadTalesClimbingConfig::UThreadTalesClimbingConfig()
 	ClimbBackJumpPlayRate = 1.35f;
 
 	// Kinematics & Jump Timings
+	GrabCatchDuration = 0.20f;
 	ShortJumpDuration = 0.95f;
 	LongJumpDuration = 1.00f;
 	LeapJumpDuration = 1.00f;
@@ -55,7 +56,7 @@ UThreadTalesClimbingConfig::UThreadTalesClimbingConfig()
 	// Shimmy
 	ShimmyStepDistance = 67.0f;
 	ShimmyCooldownDuration = 0.55f;
-	ShimmyProbeDepths = { 4.0f, 10.0f };
+	ShimmyProbeDepths = { 3.0f, 7.0f, 12.0f };
 	ShimmyVerticalTraceRange = 20.0f;
 	ShimmyMaxZDifference = 20.0f;
 	ShimmyInputDebounceDuration = 0.15f;
@@ -89,25 +90,25 @@ UThreadTalesClimbingConfig::UThreadTalesClimbingConfig()
 	LedgeTag = FName(TEXT("Ledge"));
 	bRequireLedgeTag = false;
 	bAutoGrabLedge = true;
-	ForwardTraceDistance = 120.0f;
+	ForwardTraceDistance = 100.0f;
 	ForwardTraceZOffset = 45.0f;
-	LedgeDownTraceHeight = 60.0f;
-	LedgeDownTraceDepth = 50.0f;
-	MinGrabHeight = 10.0f;
-	MaxGrabHeight = 155.0f;
+	LedgeDownTraceHeight = 30.0f;
+	LedgeDownTraceDepth = 45.0f;
+	MinGrabHeight = 20.0f;
+	MaxGrabHeight = 78.0f;
 	HandSpacing = 22.0f;
 	MaxApproachAngle = 65.0f;
-	MaxGrabVelocityZ = 400.0f;
-	LedgeProbeDepths = { 5.0f, 12.0f, 20.0f };
-	MaxGrabWallDistance = 55.0f;
+	MaxGrabVelocityZ = 750.0f;
+	LedgeProbeDepths = { 2.5f, 5.0f, 10.0f, 18.0f };
+	MaxGrabWallDistance = 85.0f;
 	LedgeSlopeMaxZDifference = 25.0f;
-	LedgeHandsProbeDepth = 8.0f;
+	LedgeHandsProbeDepth = 4.0f;
 	LedgeHandsVerticalRange = 15.0f;
 
 	// Sensing & Validation
 	LipBelowWallTraceDepth = 6.0f;
 	LipAboveAirTraceHeight = 6.0f;
-	LipModularSeamRejectDistance = 15.0f;
+	LipModularSeamRejectDistance = 3.5f;
 	BodyClearanceRadius = 20.0f;
 	BodyClearanceHeight = 40.0f;
 
@@ -129,7 +130,7 @@ UThreadTalesClimbingConfig::UThreadTalesClimbingConfig()
 	ClimbDownEdgeLipProbeRange = 25.0f;
 
 	// Sensing & Multi-Ledge Jump Probing
-	DirectionalProbeDepths = { 4.0f, 8.0f, 16.0f };
+	DirectionalProbeDepths = { 2.5f, 5.0f, 10.0f, 18.0f };
 	UpJumpTopTraceOffset = 55.0f;
 	DownJumpTopTraceOffset = 22.0f;
 	DownJumpLeapTopTraceOffset = 28.0f;
@@ -148,4 +149,15 @@ UThreadTalesClimbingConfig::UThreadTalesClimbingConfig()
 	// Camera Tuning
 	bEnableCornerCameraTurn = true;
 	CornerCameraTurnInterpSpeed = 5.0f;
+
+	// 3D Radial Ledge Scanner
+	RadialScanConeAngleH = 45.0f;
+	RadialScanConeAngleV = 35.0f;
+	RadialScanRaysH = 5;
+	RadialScanRaysV = 3;
+	RadialScanMaxDistance = 220.0f;
+	RadialScanAngleWeight = 0.65f;
+	RadialScanDistanceWeight = 0.35f;
+	RadialScanMaxValidations = 3;
+	RadialScanContinuousThrottleInterval = 0.08f;
 }

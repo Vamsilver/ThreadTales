@@ -252,6 +252,9 @@ public:
 	/** Overridden from APawn to isolate climbing movement from standard locomotion */
 	virtual void AddMovementInput(FVector WorldDirection, float ScaleValue = 1.0f, bool bForce = false) override;
 
+	/** Overridden from APawn to suppress camera/mouse controller rotation while climbing on a ledge */
+	virtual void FaceRotation(FRotator NewControlRotation, float DeltaTime = 0.f) override;
+
 	/** Overridden from ACharacter to trigger double jump directly when jumping in air */
 	virtual void Jump() override;
 

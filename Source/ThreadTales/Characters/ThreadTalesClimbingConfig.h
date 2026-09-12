@@ -56,6 +56,14 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Montages|Base")
 	TObjectPtr<UAnimMontage> BarClimbBackJumpMontage;
 
+	/** Montage played when grabbing a ledge from the air (braced against wall) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Montages|Base")
+	TObjectPtr<UAnimMontage> GrabFromAirMontage;
+
+	/** Montage played when grabbing a ledge from the air (freehanging) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Montages|Base")
+	TObjectPtr<UAnimMontage> BarGrabFromAirMontage;
+
 	/** Shimmy step left along continuous ledge */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Montages|Base")
 	TObjectPtr<UAnimMontage> ShimmyLeftMontage;
@@ -235,6 +243,10 @@ public:
 	// ==========================================
 	// KINEMATICS & JUMP TIMINGS
 	// ==========================================
+
+	/** Total interpolation duration for smooth kinematic catch into wall anchor when grabbing from air (seconds) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Tuning|Kinematics", meta = (ClampMin = "0.05", ClampMax = "0.6"))
+	float GrabCatchDuration;
 
 	/** Total interpolation duration for short ledge-to-ledge transitions (seconds) */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Tuning|Kinematics")
@@ -547,7 +559,7 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Sensing|Validation")
 	float LipAboveAirTraceHeight;
 
-	/** Horizontal 2D distance threshold to reject modular mesh seams and continuous flat walls */
+	/** Minimum horizontal shelf depth (recess of wall above edge) to reject modular mesh seams and continuous flat walls while accepting shallow wall rungs (cm) */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Sensing|Validation")
 	float LipModularSeamRejectDistance;
 
@@ -679,4 +691,53 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Tuning|Camera",
 		meta = (ClampMin = "1.0", ClampMax = "20.0", EditCondition = "bEnableCornerCameraTurn"))
 	float CornerCameraTurnInterpSpeed;
+
+	// ==========================================
+	// 3D RADIAL LEDGE SCANNER
+	// ==========================================
+
+	/** Half-angle in degrees of the horizontal search cone around player's intent vector */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Sensing|RadialScanner",
+		meta = (ClampMin = "15.0", ClampMax = "90.0"))
+	float RadialScanConeAngleH;
+
+	/** Half-angle in degrees of the vertical search cone around player's intent vector */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Sensing|RadialScanner",
+		meta = (ClampMin = "15.0", ClampMax = "75.0"))
+	float RadialScanConeAngleV;
+
+	/** Number of radial ray steps along horizontal axis of the scan cone */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Sensing|RadialScanner",
+		meta = (ClampMin = "3", ClampMax = "15"))
+	int32 RadialScanRaysH;
+
+	/** Number of radial ray steps along vertical axis of the scan cone */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Sensing|RadialScanner",
+		meta = (ClampMin = "1", ClampMax = "9"))
+	int32 RadialScanRaysV;
+
+	/** Maximum search distance (cm) for 3D volumetric ledge detection */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Sensing|RadialScanner",
+		meta = (ClampMin = "50.0", ClampMax = "400.0"))
+	float RadialScanMaxDistance;
+
+	/** Weight of angular alignment in candidate scoring heuristic (0.0 .. 1.0) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Sensing|RadialScanner",
+		meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float RadialScanAngleWeight;
+
+	/** Weight of proximity (shorter distance) in candidate scoring heuristic (0.0 .. 1.0) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Sensing|RadialScanner",
+		meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float RadialScanDistanceWeight;
+
+	/** Maximum number of top candidates to run expensive body & hand clearance checks on (Coarse-to-Fine LOD) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Sensing|RadialScanner",
+		meta = (ClampMin = "1", ClampMax = "10"))
+	int32 RadialScanMaxValidations;
+
+	/** Throttle interval in seconds for continuous intent scanning while holding stick in IdleHang (~12.5 Hz) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Sensing|RadialScanner",
+		meta = (ClampMin = "0.01", ClampMax = "0.5"))
+	float RadialScanContinuousThrottleInterval;
 };

@@ -91,6 +91,16 @@ bool FThreadTalesTraversalInputHelper::IsBackInputHeld(const APlayerController* 
 	return (StickY < -0.35f);
 }
 
+bool FThreadTalesTraversalInputHelper::IsJumpPressed(const APlayerController* PC)
+{
+	if (!PC)
+	{
+		return false;
+	}
+
+	return PC->IsInputKeyDown(EKeys::SpaceBar) || PC->IsInputKeyDown(EKeys::Gamepad_FaceButton_Bottom);
+}
+
 EThreadTalesLedgeJumpDirection FThreadTalesTraversalInputHelper::VectorToJumpDirection(const FVector2D& InputVector, float DeadZone)
 {
 	if (InputVector.SizeSquared() < (DeadZone * DeadZone))
@@ -204,4 +214,48 @@ bool FThreadTalesTraversalInputHelper::IsSprintHeld(const APlayerController* PC)
 	       PC->IsInputKeyDown(EKeys::RightShift) ||
 	       PC->IsInputKeyDown(EKeys::Gamepad_LeftThumbstick) ||
 	       PC->IsInputKeyDown(EKeys::Gamepad_LeftShoulder);
+}
+
+FVector FThreadTalesTraversalInputHelper::GetClimbingIntentWorldVector(
+	const APlayerController* PC,
+	const FVector& WallNormal,
+	const FVector& WallRight,
+	bool bBackJumpIntent)
+{
+	const FVector Up = FVector::UpVector;
+	const FVector SafeWallNormal = WallNormal.GetSafeNormal();
+	const FVector SafeWallRight = WallRight.GetSafeNormal();
+
+	if (!PC)
+	{
+		return Up;
+	}
+
+	const FVector2D Input2D = GetMovementInputVector(PC, nullptr);
+	const bool bHasInput = (Input2D.SizeSquared() > 0.04f);
+
+	if (!bHasInput)
+	{
+		// Neutral input: pressing Space or attempting grab defaults to upward intent
+		return Up;
+	}
+
+	// Lateral component along wall face: X is Right (+1) / Left (-1)
+	const FVector LateralComponent = SafeWallRight * Input2D.X;
+
+	// Vertical component: Y is Forward/Up (+1) / Backward/Down (-1)
+	const FVector VerticalComponent = Up * Input2D.Y;
+
+	// If player is pulling backward (Y < -0.1f) and bBackJumpIntent is active or Back key held,
+	// blend outward away from wall along SafeWallNormal into open 3D space
+	if (Input2D.Y < -0.1f && (bBackJumpIntent || IsBackInputHeld(PC)))
+	{
+		const float BackAmount = FMath::Abs(Input2D.Y);
+		const FVector OutwardComponent = SafeWallNormal * BackAmount;
+		const FVector Combined = LateralComponent + OutwardComponent + (Up * (Input2D.Y * 0.4f));
+		return Combined.GetSafeNormal();
+	}
+
+	const FVector WorldIntent = LateralComponent + VerticalComponent;
+	return WorldIntent.IsNearlyZero() ? Up : WorldIntent.GetSafeNormal();
 }

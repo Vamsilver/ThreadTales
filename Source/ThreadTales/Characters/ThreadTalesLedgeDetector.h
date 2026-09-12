@@ -195,4 +195,44 @@ public:
 		FVector& OutLedgeLoc,
 		FVector& OutWallNormal
 	);
+
+	/**
+	 * 3D Radial Ledge Scanner:
+	 * Scans a 3D volumetric cone of space around the player's intent vector, discovers all candidate ledges
+	 * within reach (up to RadialScanMaxDistance), validates them with multi-depth lip & body clearance checks,
+	 * scores them based on angular alignment and proximity, and returns the highest-scoring candidate.
+	 *
+	 * @param Character Character performing the scan
+	 * @param Config Climbing configuration with tuning parameters
+	 * @param bDrawDebugTraces Whether to draw 3D debug visualizations
+	 * @param CurrentLedgeLoc Current hand-hold location in world space
+	 * @param CurrentWallNormal Outward 2D normal of current wall face
+	 * @param IntentDirectionWorld 3D world direction vector of player input intent
+	 * @param JumpTable Jump configuration table for distance tier classification
+	 * @param OutBestCandidate The best scoring validated candidate ledge
+	 * @return true if at least one valid candidate ledge was found
+	 */
+	static bool FindBestLedgeInCone(
+		const ACharacter* Character,
+		const UThreadTalesClimbingConfig* Config,
+		bool bDrawDebugTraces,
+		const FVector& CurrentLedgeLoc,
+		const FVector& CurrentWallNormal,
+		const FVector& IntentDirectionWorld,
+		const FThreadTalesJumpConfigTable& JumpTable,
+		FThreadTalesLedgeCandidate& OutBestCandidate
+	);
+
+	/**
+	 * Helper to classify a 3D displacement vector from current ledge to target ledge into
+	 * discrete EThreadTalesLedgeJumpDirection and EThreadTalesLedgeJumpDistanceType.
+	 */
+	static void ClassifyCandidateDirectionAndTier(
+		const FVector& Displacement,
+		const FVector& WallNormal2D,
+		const FVector& WallRight,
+		const FThreadTalesJumpConfigTable& JumpTable,
+		EThreadTalesLedgeJumpDirection& OutDirection,
+		EThreadTalesLedgeJumpDistanceType& OutDistanceType
+	);
 };

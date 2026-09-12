@@ -454,28 +454,7 @@ void UThreadTalesTraversalComponent::Multicast_StartLedgeClimb_Implementation(co
 		return;
 	}
 
-	bIsFreehang = CheckIsFreehangLedge(LedgeLocation, WallNormal);
-	LedgeHandler.SetIsFreehang(bIsFreehang);
-	SetClimbingSubState(EThreadTalesClimbingSubState::IdleHang);
-	LedgeHandler.SetCachedLedgeLocation(LedgeLocation);
-	LedgeHandler.SetCachedWallNormal(WallNormal);
-
-	const FRotator FaceWallRotation = (-WallNormal).Rotation();
-	const FRotator HangRot = FRotator(0.0f, FaceWallRotation.Yaw, 0.0f);
-	const FVector HangLoc = LedgeLocation + (WallNormal * GetHangWallOffset()) - FVector(0.0f, 0.0f, GetHangHeightOffset());
-	LedgeHandler.SetCachedHangRotation(HangRot);
-	LedgeHandler.SetCachedHangLocation(HangLoc);
-
-	SetTraversalState(EThreadTalesTraversalState::LedgeClimbing);
-
-	if (UCharacterMovementComponent* MoveComp = CharacterOwner->GetCharacterMovement())
-	{
-		MoveComp->Velocity = FVector::ZeroVector;
-		MoveComp->SetMovementMode(MOVE_Flying);
-	}
-
-	CharacterOwner->SetActorLocationAndRotation(HangLoc, HangRot, false, nullptr, ETeleportType::TeleportPhysics);
-	LedgeHandler.CrossfadeToHangMontage(this, CharacterOwner);
+	LedgeHandler.StartLedgeClimb(LedgeLocation, WallNormal, this, CharacterOwner);
 }
 
 void UThreadTalesTraversalComponent::Server_ReleaseLedge_Implementation()
@@ -601,8 +580,13 @@ void UThreadTalesTraversalComponent::Multicast_PlayClimbMontage_Implementation(U
 
 	if (UCharacterMovementComponent* MoveComp = CharacterOwner->GetCharacterMovement())
 	{
+		MoveComp->bUseControllerDesiredRotation = false;
+		MoveComp->bOrientRotationToMovement = false;
+		MoveComp->Velocity = FVector::ZeroVector;
 		MoveComp->SetMovementMode(MOVE_Flying);
 	}
+	CharacterOwner->bUseControllerRotationYaw = false;
+	CharacterOwner->SetActorLocationAndRotation(LedgeHandler.GetCachedHangLocation(), LedgeHandler.GetCachedHangRotation(), false, nullptr, ETeleportType::TeleportPhysics);
 
 	if (MontageToPlay)
 	{
@@ -660,6 +644,7 @@ void UThreadTalesTraversalComponent::Multicast_ClimbDown_Implementation(const FV
 		MoveComp->Velocity = FVector::ZeroVector;
 		MoveComp->SetMovementMode(MOVE_Flying);
 	}
+	CharacterOwner->bUseControllerRotationYaw = false;
 
 	LedgeHandler.SetClimbDownCollision(true, CharacterOwner);
 
@@ -769,4 +754,17 @@ UAnimMontage* UThreadTalesTraversalComponent::GetActiveCornerMontage(bool bLeft,
 	}
 
 	return Montage;
+}
+
+UAnimMontage* UThreadTalesTraversalComponent::GetActiveGrabMontage(bool bFreehang) const
+{
+	if (ClimbingConfig)
+	{
+		if (bFreehang && ClimbingConfig->BarGrabFromAirMontage)
+		{
+			return ClimbingConfig->BarGrabFromAirMontage.Get();
+		}
+		return ClimbingConfig->GrabFromAirMontage.Get();
+	}
+	return nullptr;
 }

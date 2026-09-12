@@ -4,6 +4,7 @@
 #include "Characters/ThreadTalesClimbingConfig.h"
 #include "Characters/ThreadTalesClimbingKinematics.h"
 #include "GameFramework/Character.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Engine/World.h"
 #include "DrawDebugHelpers.h"
@@ -42,80 +43,111 @@ bool FThreadTalesLedgeDetector::TraceForwardWall(
 	const bool bRequireTag = Config ? Config->bRequireLedgeTag : false;
 
 	const float TraceHeights[] = {
+		FwdZOffset - 20.0f,
 		FwdZOffset,
-		FwdZOffset + 35.0f,
-		FwdZOffset + 70.0f,
-		FwdZOffset + 105.0f,
-		FwdZOffset - 35.0f,
-		FwdZOffset - 70.0f
+		FwdZOffset + 15.0f,
+		FwdZOffset + 25.0f
 	};
 
 	FCollisionQueryParams QueryParams;
 	QueryParams.AddIgnoredActor(Character);
 	QueryParams.bTraceComplex = false;
 
+	const float WallSweepRadius = 12.0f;
+	const FCollisionShape SweepSphere = FCollisionShape::MakeSphere(WallSweepRadius);
+
+	// Multi-angle directions: Forward, plus velocity-aligned and small lateral fan
+	TArray<FVector> TraceDirs;
+	TraceDirs.Add(Forward);
+
+	if (const UCharacterMovementComponent* MoveComp = Character->GetCharacterMovement())
+	{
+		FVector Vel2D = MoveComp->Velocity;
+		Vel2D.Z = 0.0f;
+		if (Vel2D.SizeSquared() > FMath::Square(80.0f))
+		{
+			const FVector MoveDir = Vel2D.GetSafeNormal();
+			if (FVector::DotProduct(MoveDir, Forward) > 0.4f && FVector::DotProduct(MoveDir, Forward) < 0.98f)
+			{
+				TraceDirs.Add(MoveDir);
+			}
+		}
+	}
+	TraceDirs.Add(Forward.RotateAngleAxis(18.0f, Up));
+	TraceDirs.Add(Forward.RotateAngleAxis(-18.0f, Up));
+
 	bool bFoundWall = false;
 	FHitResult BestHit;
-	float ClosestDistanceSq = FLT_MAX;
 
-	for (float HeightOffset : TraceHeights)
+	for (const FVector& Dir : TraceDirs)
 	{
-		const FVector Start = ActorLoc + Up * HeightOffset;
-		const FVector End = Start + Forward * FwdDist;
-
-		FHitResult Hit;
-		const bool bHit = World->LineTraceSingleByChannel(Hit, Start, End, ECC_Visibility, QueryParams);
-
-		if (bDrawDebugTraces)
+		for (float HeightOffset : TraceHeights)
 		{
-			DrawDebugLine(World, Start, End, (bHit && Hit.bBlockingHit) ? FColor::Green : FColor::Red, false, -1.0f, 0, 1.0f);
-		}
+			const FVector Start = ActorLoc + Up * HeightOffset;
+			const FVector End = Start + Dir * FwdDist;
 
-		if (bHit && Hit.bBlockingHit)
-		{
-			if (bRequireTag && !LedgeTag.IsNone())
+			FHitResult Hit;
+			const bool bHit = World->SweepSingleByChannel(Hit, Start, End, FQuat::Identity, ECC_Visibility, SweepSphere, QueryParams);
+
+			if (bDrawDebugTraces)
 			{
-				bool bHasTag = false;
-				if (Hit.GetActor() && Hit.GetActor()->ActorHasTag(LedgeTag))
+				DrawDebugLine(World, Start, End, (bHit && Hit.bBlockingHit) ? FColor::Green : FColor::Red, false, -1.0f, 0, 1.0f);
+				if (bHit && Hit.bBlockingHit)
 				{
-					bHasTag = true;
+					DrawDebugSphere(World, Hit.ImpactPoint, 6.0f, 8, FColor::Cyan, false, -1.0f, 0, 1.0f);
 				}
-				else if (Hit.GetComponent() && Hit.GetComponent()->ComponentHasTag(LedgeTag))
+			}
+
+			if (bHit && Hit.bBlockingHit)
+			{
+				if (bRequireTag && !LedgeTag.IsNone())
 				{
-					bHasTag = true;
+					bool bHasTag = false;
+					if (Hit.GetActor() && Hit.GetActor()->ActorHasTag(LedgeTag))
+					{
+						bHasTag = true;
+					}
+					else if (Hit.GetComponent() && Hit.GetComponent()->ComponentHasTag(LedgeTag))
+					{
+						bHasTag = true;
+					}
+					if (!bHasTag)
+					{
+						continue;
+					}
 				}
-				if (!bHasTag)
+
+				// Reject ceilings, acute overhangs, and floors
+				if (FMath::Abs(Hit.ImpactNormal.Z) > 0.45f)
 				{
 					continue;
 				}
-			}
 
-			// Reject ceilings, acute overhangs, and floors
-			if (FMath::Abs(Hit.ImpactNormal.Z) > 0.45f)
-			{
-				continue;
-			}
+				const FVector WallNorm2D = FVector(Hit.ImpactNormal.X, Hit.ImpactNormal.Y, 0.0f).GetSafeNormal();
+				if (WallNorm2D.IsNearlyZero())
+				{
+					continue;
+				}
 
-			const FVector WallNorm2D = FVector(Hit.ImpactNormal.X, Hit.ImpactNormal.Y, 0.0f).GetSafeNormal();
-			if (WallNorm2D.IsNearlyZero())
-			{
-				continue;
-			}
+				const float ApproachDot = FVector::DotProduct(-Dir, WallNorm2D);
+				const float MinApproachDot = FMath::Cos(FMath::DegreesToRadians(MaxApproachDeg));
+				if (ApproachDot < MinApproachDot)
+				{
+					continue;
+				}
 
-			const float ApproachDot = FVector::DotProduct(-Forward, WallNorm2D);
-			const float MinApproachDot = FMath::Cos(FMath::DegreesToRadians(MaxApproachDeg));
-			if (ApproachDot < MinApproachDot)
-			{
-				continue;
+				// Prioritize higher wall hits (closest to the top ledge lip)
+				if (!bFoundWall || Hit.ImpactPoint.Z > BestHit.ImpactPoint.Z)
+				{
+					BestHit = Hit;
+					bFoundWall = true;
+				}
 			}
+		}
 
-			const float DistSq = FVector::DistSquared(Start, Hit.ImpactPoint);
-			if (DistSq < ClosestDistanceSq)
-			{
-				ClosestDistanceSq = DistSq;
-				BestHit = Hit;
-				bFoundWall = true;
-			}
+		if (bFoundWall)
+		{
+			break;
 		}
 	}
 
@@ -157,7 +189,7 @@ bool FThreadTalesLedgeDetector::ProbeLedgeTopSurface(
 	const float MinGrabH = Config ? Config->MinGrabHeight : 30.0f;
 	const float MaxGrabH = Config ? Config->MaxGrabHeight : 140.0f;
 
-	TArray<float> ProbeDepths = (Config && Config->LedgeProbeDepths.Num() > 0) ? Config->LedgeProbeDepths : TArray<float>{ 4.0f, 8.0f, 16.0f, 28.0f };
+	TArray<float> ProbeDepths = (Config && Config->LedgeProbeDepths.Num() > 0) ? Config->LedgeProbeDepths : TArray<float>{ 2.5f, 5.0f, 10.0f, 18.0f };
 
 	FCollisionQueryParams QueryParams;
 	QueryParams.AddIgnoredActor(Character);
@@ -170,8 +202,9 @@ bool FThreadTalesLedgeDetector::ProbeLedgeTopSurface(
 	for (float InwardDepth : ProbeDepths)
 	{
 		const FVector WallFaceXY = ForwardHit.ImpactPoint - WallNormal * InwardDepth;
-		const FVector DownTraceStart = FVector(WallFaceXY.X, WallFaceXY.Y, ActorLoc.Z + DownTraceH);
-		const FVector DownTraceEnd = FVector(WallFaceXY.X, WallFaceXY.Y, ActorLoc.Z - DownTraceD);
+		const float BaseZ = ForwardHit.ImpactPoint.Z;
+		const FVector DownTraceStart = FVector(WallFaceXY.X, WallFaceXY.Y, BaseZ + DownTraceH);
+		const FVector DownTraceEnd = FVector(WallFaceXY.X, WallFaceXY.Y, BaseZ - DownTraceD);
 
 		FHitResult DownHit;
 		const bool bHitDown = World->LineTraceSingleByChannel(DownHit, DownTraceStart, DownTraceEnd, ECC_Visibility, QueryParams);
@@ -265,29 +298,36 @@ bool FThreadTalesLedgeDetector::ValidateLedgeLipAndClearance(
 		}
 	}
 
-	// 2. Above Lip Check (Flat Wall & Modular Seam Rejector)
+	// 2. Above Lip Check (Flat Wall & Modular Seam Rejector vs Real Wall Protrusions)
 	const FVector AboveLipStart = EdgeLoc + (Normal2D * 25.0f) + Up * LipAboveHeight;
-	const FVector AboveLipEnd = EdgeLoc - (Normal2D * 8.0f) + Up * LipAboveHeight;
+	const FVector AboveLipEnd = EdgeLoc - (Normal2D * 20.0f) + Up * LipAboveHeight;
 
 	FHitResult AboveHit;
 	bool bAboveHit = World->LineTraceSingleByChannel(AboveHit, AboveLipStart, AboveLipEnd, ECC_Visibility, QueryParams);
 
-	if (bDrawDebugTraces)
-	{
-		DrawDebugLine(World, AboveLipStart, AboveLipEnd, (bAboveHit && AboveHit.bBlockingHit) ? FColor::Red : FColor::Green, false, 2.0f, 0, 1.5f);
-	}
-
 	if (bAboveHit && AboveHit.bBlockingHit)
 	{
-		const float Dist2D = FVector::Dist2D(AboveHit.ImpactPoint, EdgeLoc);
-		if (Dist2D < SeamRejectDist)
+		// Physical horizontal shelf depth: how far the wall above is recessed behind the front edge of the ledge
+		const float ShelfDepth = FVector::DotProduct(EdgeLoc - AboveHit.ImpactPoint, Normal2D);
+		const bool bIsWallBlocking = (ShelfDepth < SeamRejectDist);
+
+		if (bDrawDebugTraces)
+		{
+			DrawDebugLine(World, AboveLipStart, AboveHit.ImpactPoint, bIsWallBlocking ? FColor::Red : FColor::Green, false, 2.0f, 0, 1.5f);
+		}
+
+		if (bIsWallBlocking)
 		{
 			if (bDrawDebugTraces)
 			{
-				DrawDebugString(World, EdgeLoc + FVector(0, 0, 10), TEXT("REJECT: WALL ABOVE"), nullptr, FColor::Red, 2.0f, true);
+				DrawDebugString(World, EdgeLoc + FVector(0, 0, 10), TEXT("REJECT: WALL ABOVE / SEAM"), nullptr, FColor::Red, 2.0f, true);
 			}
 			return false;
 		}
+	}
+	else if (bDrawDebugTraces)
+	{
+		DrawDebugLine(World, AboveLipStart, AboveLipEnd, FColor::Green, false, 2.0f, 0, 1.5f);
 	}
 
 	// 3. Body Clearance Check
@@ -502,9 +542,8 @@ bool FThreadTalesLedgeDetector::DetectLedge(
 	const FVector TrueLedgeEdge = FVector(EdgePointXY.X, EdgePointXY.Y, LedgeTopZ);
 
 	// 4. Wall Proximity Check (prevent teleportation)
-	const FVector ForwardStart = ActorLoc + FVector::UpVector * FwdZOffset;
-	const float WallForwardDist = FVector::DotProduct(ForwardHit.ImpactPoint - ForwardStart, Forward);
-	if (WallForwardDist > MaxGrabWallDist)
+	const float WallDist2D = FVector::Dist2D(ActorLoc, ForwardHit.ImpactPoint);
+	if (WallDist2D > MaxGrabWallDist)
 	{
 		return false;
 	}
@@ -678,7 +717,7 @@ bool FThreadTalesLedgeDetector::FindLedgeInDirection(
 	const FVector WallNorm2D = CurrentWallNormal.GetSafeNormal();
 	const FVector WallRight = FVector::CrossProduct(WallNorm2D, Up).GetSafeNormal();
 
-	const TArray<float> ProbeDepths = (Config && Config->DirectionalProbeDepths.Num() > 0) ? Config->DirectionalProbeDepths : TArray<float>{ 4.0f, 8.0f, 16.0f };
+	const TArray<float> ProbeDepths = (Config && Config->DirectionalProbeDepths.Num() > 0) ? Config->DirectionalProbeDepths : TArray<float>{ 2.5f, 5.0f, 10.0f, 18.0f };
 	const float UpJumpTopOffset = Config ? Config->UpJumpTopTraceOffset : 55.0f;
 	const float DownJumpTopOffset = Config ? Config->DownJumpTopTraceOffset : 22.0f;
 	const float DownJumpLeapTopOffset = Config ? Config->DownJumpLeapTopTraceOffset : 28.0f;
@@ -1718,4 +1757,347 @@ bool FThreadTalesLedgeDetector::ProbeCornerLedge(
 	}
 
 	return false;
+}
+
+void FThreadTalesLedgeDetector::ClassifyCandidateDirectionAndTier(
+	const FVector& Displacement,
+	const FVector& WallNormal2D,
+	const FVector& WallRight,
+	const FThreadTalesJumpConfigTable& JumpTable,
+	EThreadTalesLedgeJumpDirection& OutDirection,
+	EThreadTalesLedgeJumpDistanceType& OutDistanceType)
+{
+	const float Dist = Displacement.Size();
+
+	// 1. Distance Tier classification based on calibrated thresholds
+	if (Dist <= 60.0f)
+	{
+		OutDistanceType = EThreadTalesLedgeJumpDistanceType::Short;
+	}
+	else if (Dist <= 115.0f)
+	{
+		OutDistanceType = EThreadTalesLedgeJumpDistanceType::Long;
+	}
+	else
+	{
+		OutDistanceType = EThreadTalesLedgeJumpDistanceType::Leap;
+	}
+
+	// 2. Project displacement onto wall plane: Lateral (X) along WallRight, Vertical (Y) along UpVector
+	const float ProjX = FVector::DotProduct(Displacement, WallRight);
+	const float ProjY = Displacement.Z;
+
+	// Angle in degrees in [-180, 180]
+	const float AngleDegrees = FMath::RadiansToDegrees(FMath::Atan2(ProjY, ProjX));
+
+	// 8-directional classification with 45° sectors
+	if (AngleDegrees >= -22.5f && AngleDegrees <= 22.5f)
+	{
+		OutDirection = EThreadTalesLedgeJumpDirection::Right;
+	}
+	else if (AngleDegrees > 22.5f && AngleDegrees <= 67.5f)
+	{
+		OutDirection = EThreadTalesLedgeJumpDirection::UpRight;
+	}
+	else if (AngleDegrees > 67.5f && AngleDegrees <= 112.5f)
+	{
+		OutDirection = EThreadTalesLedgeJumpDirection::Up;
+	}
+	else if (AngleDegrees > 112.5f && AngleDegrees <= 157.5f)
+	{
+		OutDirection = EThreadTalesLedgeJumpDirection::UpLeft;
+	}
+	else if (AngleDegrees > 157.5f || AngleDegrees < -157.5f)
+	{
+		OutDirection = EThreadTalesLedgeJumpDirection::Left;
+	}
+	else if (AngleDegrees >= -157.5f && AngleDegrees < -112.5f)
+	{
+		OutDirection = EThreadTalesLedgeJumpDirection::DownLeft;
+	}
+	else if (AngleDegrees >= -112.5f && AngleDegrees < -67.5f)
+	{
+		OutDirection = EThreadTalesLedgeJumpDirection::Down;
+	}
+	else // AngleDegrees >= -67.5f && AngleDegrees < -22.5f
+	{
+		OutDirection = EThreadTalesLedgeJumpDirection::DownRight;
+	}
+}
+
+bool FThreadTalesLedgeDetector::FindBestLedgeInCone(
+	const ACharacter* Character,
+	const UThreadTalesClimbingConfig* Config,
+	bool bDrawDebugTraces,
+	const FVector& CurrentLedgeLoc,
+	const FVector& CurrentWallNormal,
+	const FVector& IntentDirectionWorld,
+	const FThreadTalesJumpConfigTable& JumpTable,
+	FThreadTalesLedgeCandidate& OutBestCandidate)
+{
+	OutBestCandidate = FThreadTalesLedgeCandidate();
+
+	if (!Character)
+	{
+		return false;
+	}
+
+	UWorld* World = Character->GetWorld();
+	if (!World)
+	{
+		return false;
+	}
+
+	FCollisionQueryParams Params;
+	Params.AddIgnoredActor(Character);
+	Params.bTraceComplex = false;
+
+	const FVector Up = FVector::UpVector;
+	const FVector WallNorm2D = CurrentWallNormal.GetSafeNormal();
+	const FVector WallRight = FVector::CrossProduct(WallNorm2D, Up).GetSafeNormal();
+
+	const float HalfAngleH = Config ? Config->RadialScanConeAngleH : 45.0f;
+	const float HalfAngleV = Config ? Config->RadialScanConeAngleV : 35.0f;
+	const int32 StepsH = Config ? FMath::Max(Config->RadialScanRaysH, 3) : 7;
+	const int32 StepsV = Config ? FMath::Max(Config->RadialScanRaysV, 1) : 5;
+	const float MaxDist = Config ? Config->RadialScanMaxDistance : 220.0f;
+	const float AngleWeight = Config ? Config->RadialScanAngleWeight : 0.65f;
+	const float DistWeight = Config ? Config->RadialScanDistanceWeight : 0.35f;
+	const TArray<float> ProbeDepths = (Config && Config->DirectionalProbeDepths.Num() > 0) ? Config->DirectionalProbeDepths : TArray<float>{ 2.5f, 5.0f, 10.0f, 18.0f };
+
+	const FVector CentralDir = IntentDirectionWorld.IsNearlyZero() ? Up : IntentDirectionWorld.GetSafeNormal();
+
+	// Orthonormal basis for scanning cone around CentralDir
+	FVector ConeRight;
+	FVector ConeUp;
+	if (FMath::Abs(FVector::DotProduct(CentralDir, Up)) > 0.92f)
+	{
+		ConeRight = WallRight;
+		ConeUp = FVector::CrossProduct(ConeRight, CentralDir).GetSafeNormal();
+	}
+	else
+	{
+		ConeRight = FVector::CrossProduct(CentralDir, Up).GetSafeNormal();
+		ConeUp = FVector::CrossProduct(ConeRight, CentralDir).GetSafeNormal();
+	}
+
+	const float WallSweepRadius = 14.0f;
+	TArray<FThreadTalesLedgeCandidate> UnvalidatedCandidates;
+
+	// Lambda to evaluate a candidate hit on a wall surface (Phase 1: Fast Edge Discovery)
+	auto ProcessWallHit = [&](const FHitResult& WallHit)
+	{
+		if (!WallHit.bBlockingHit || FMath::Abs(WallHit.ImpactNormal.Z) > 0.45f)
+		{
+			return;
+		}
+
+		const FVector FoundWallNorm2D = FVector(WallHit.ImpactNormal.X, WallHit.ImpactNormal.Y, 0.0f).GetSafeNormal();
+		if (FoundWallNorm2D.IsNearlyZero())
+		{
+			return;
+		}
+
+		// Probe downward for top surface
+		FHitResult BestTopHit;
+		bool bFoundValidTop = false;
+
+		for (float Depth : ProbeDepths)
+		{
+			const FVector DownStart = WallHit.ImpactPoint - (FoundWallNorm2D * Depth) + FVector(0.0f, 0.0f, 55.0f);
+			const FVector DownEnd = WallHit.ImpactPoint - (FoundWallNorm2D * Depth) - FVector(0.0f, 0.0f, 40.0f);
+
+			FHitResult CurrentTopHit;
+			if (World->LineTraceSingleByChannel(CurrentTopHit, DownStart, DownEnd, ECC_Visibility, Params))
+			{
+				if (CurrentTopHit.ImpactNormal.Z >= 0.55f)
+				{
+					BestTopHit = CurrentTopHit;
+					bFoundValidTop = true;
+					break;
+				}
+			}
+		}
+
+		if (!bFoundValidTop)
+		{
+			return;
+		}
+
+		// Pinpoint exact outer lip
+		const float LedgeTopZ = BestTopHit.ImpactPoint.Z;
+		const FVector PinStart = FVector(BestTopHit.ImpactPoint.X, BestTopHit.ImpactPoint.Y, LedgeTopZ - 6.0f) + (FoundWallNorm2D * 40.0f);
+		const FVector PinEnd = PinStart - (FoundWallNorm2D * 80.0f);
+
+		FHitResult EdgeWallHit;
+		if (!World->LineTraceSingleByChannel(EdgeWallHit, PinStart, PinEnd, ECC_Visibility, Params))
+		{
+			return;
+		}
+
+		const FVector CandidateLoc = FVector(EdgeWallHit.ImpactPoint.X, EdgeWallHit.ImpactPoint.Y, LedgeTopZ);
+		const FVector CandidateNormal = FVector(EdgeWallHit.ImpactNormal.X, EdgeWallHit.ImpactNormal.Y, 0.0f).GetSafeNormal();
+
+		const float Dist = FVector::Dist(CandidateLoc, CurrentLedgeLoc);
+		if (Dist < 20.0f || Dist > MaxDist)
+		{
+			return;
+		}
+
+		// Avoid duplicate candidates
+		for (const FThreadTalesLedgeCandidate& Existing : UnvalidatedCandidates)
+		{
+			if (FVector::DistSquared(Existing.LedgeLocation, CandidateLoc) < (18.0f * 18.0f))
+			{
+				return;
+			}
+		}
+
+		// Fast candidate candidate registration & preliminary scoring (deferred heavy clearance checks)
+		FThreadTalesLedgeCandidate Cand;
+		Cand.LedgeLocation = CandidateLoc;
+		Cand.WallNormal = CandidateNormal;
+		Cand.Distance = Dist;
+
+		ClassifyCandidateDirectionAndTier(CandidateLoc - CurrentLedgeLoc, CandidateNormal, WallRight, JumpTable, Cand.Direction, Cand.DistanceType);
+
+		const FVector DirToCand = (CandidateLoc - CurrentLedgeLoc).GetSafeNormal();
+		const float AlignmentDot = FMath::Clamp(FVector::DotProduct(CentralDir, DirToCand), 0.0f, 1.0f);
+		const float ProximityRatio = 1.0f - FMath::Clamp(Dist / MaxDist, 0.0f, 1.0f);
+		Cand.Score = (AlignmentDot * AngleWeight) + (ProximityRatio * DistWeight);
+
+		UnvalidatedCandidates.Add(Cand);
+
+		if (bDrawDebugTraces)
+		{
+			DrawDebugSphere(World, CandidateLoc, 7.0f, 8, FColor::Cyan, false, 1.5f, 0, 1.0f);
+		}
+	};
+
+	// 4 calibrated distance tiers covering Short (45), Long (85), Leap (140), and MaxLeap (190)
+	const float DistanceTiers[] = { 45.0f, 85.0f, 140.0f, 190.0f };
+
+	for (int32 h = 0; h < StepsH; ++h)
+	{
+		const float FracH = (StepsH > 1) ? ((float)h / (float)(StepsH - 1) * 2.0f - 1.0f) : 0.0f;
+		const float AngleH = FracH * HalfAngleH;
+
+		for (int32 v = 0; v < StepsV; ++v)
+		{
+			const float FracV = (StepsV > 1) ? ((float)v / (float)(StepsV - 1) * 2.0f - 1.0f) : 0.0f;
+			const float AngleV = FracV * HalfAngleV;
+
+			const FQuat RotH = FQuat(ConeUp, FMath::DegreesToRadians(AngleH));
+			const FQuat RotV = FQuat(ConeRight, FMath::DegreesToRadians(AngleV));
+			const FVector RayDir = (RotH * RotV).RotateVector(CentralDir).GetSafeNormal();
+
+			const float OutwardDot = FVector::DotProduct(RayDir, WallNorm2D);
+
+			// A. If ray points into the room (away from wall), do a 3D volumetric sweep
+			if (OutwardDot > 0.25f)
+			{
+				const FVector SweepStart = CurrentLedgeLoc + (WallNorm2D * 15.0f);
+				const FVector SweepEnd = SweepStart + (RayDir * MaxDist);
+
+				if (bDrawDebugTraces)
+				{
+					DrawDebugLine(World, SweepStart, SweepEnd, FColor(0, 180, 255, 60), false, 1.5f, 0, 0.7f);
+				}
+
+				FHitResult WallHit;
+				if (World->SweepSingleByChannel(WallHit, SweepStart, SweepEnd, FQuat::Identity, ECC_Visibility, FCollisionShape::MakeSphere(WallSweepRadius), Params))
+				{
+					ProcessWallHit(WallHit);
+				}
+			}
+			else
+			{
+				// B. Ray is in/along the wall plane (e.g. Up, Down, Lateral, Diagonals).
+				// We sample distance tiers along RayDir and probe HORIZONTALLY INTO THE WALL (-WallNorm2D)!
+				const FVector WallPlaneDir = FVector::VectorPlaneProject(RayDir, WallNorm2D).GetSafeNormal();
+				if (WallPlaneDir.IsNearlyZero())
+				{
+					continue;
+				}
+
+				for (float TierDist : DistanceTiers)
+				{
+					if (TierDist > MaxDist)
+					{
+						break;
+					}
+
+					const FVector TargetPlanePoint = CurrentLedgeLoc + (WallPlaneDir * TierDist);
+					const FVector SweepStart = TargetPlanePoint + (WallNorm2D * 45.0f);
+					const FVector SweepEnd   = TargetPlanePoint - (WallNorm2D * 85.0f);
+
+					if (bDrawDebugTraces)
+					{
+						DrawDebugLine(World, SweepStart, SweepEnd, FColor(0, 220, 255, 80), false, 1.2f, 0, 0.8f);
+					}
+
+					FHitResult WallHit;
+					if (World->SweepSingleByChannel(WallHit, SweepStart, SweepEnd, FQuat::Identity, ECC_Visibility, FCollisionShape::MakeSphere(WallSweepRadius), Params))
+					{
+						ProcessWallHit(WallHit);
+					}
+				}
+			}
+		}
+	}
+
+	if (UnvalidatedCandidates.Num() == 0)
+	{
+		return false;
+	}
+
+	// Sort unvalidated candidates by Score descending
+	UnvalidatedCandidates.Sort([](const FThreadTalesLedgeCandidate& A, const FThreadTalesLedgeCandidate& B)
+	{
+		return A.Score > B.Score;
+	});
+
+	// Phase 2: Lazy Fine Validation on top-scoring candidates only
+	const int32 MaxValidations = Config ? FMath::Max(Config->RadialScanMaxValidations, 1) : 3;
+	const int32 CandidatesToTest = FMath::Min(UnvalidatedCandidates.Num(), MaxValidations);
+
+	bool bFoundWinner = false;
+	for (int32 i = 0; i < CandidatesToTest; ++i)
+	{
+		const FThreadTalesLedgeCandidate& Cand = UnvalidatedCandidates[i];
+
+		if (!ValidateLedgeLipAndClearance(Character, Config, bDrawDebugTraces, Cand.LedgeLocation, Cand.WallNormal))
+		{
+			continue;
+		}
+
+		if (!ValidateLedgeHandsPlacement(Character, Config, bDrawDebugTraces, Cand.LedgeLocation, Cand.WallNormal))
+		{
+			continue;
+		}
+
+		OutBestCandidate = Cand;
+		bFoundWinner = true;
+		break;
+	}
+
+	if (!bFoundWinner)
+	{
+		return false;
+	}
+
+	if (bDrawDebugTraces)
+	{
+		DrawDebugSphere(World, OutBestCandidate.LedgeLocation, 16.0f, 16, FColor::Orange, false, 3.5f, 0, 2.5f);
+		DrawDebugDirectionalArrow(World, CurrentLedgeLoc, OutBestCandidate.LedgeLocation, 16.0f, FColor::Emerald, false, 3.5f, 0, 3.0f);
+		DrawDebugString(World, OutBestCandidate.LedgeLocation + FVector(0, 0, 25),
+			FString::Printf(TEXT("WINNER (Dist:%.0f, Sc:%.2f)"), OutBestCandidate.Distance, OutBestCandidate.Score),
+			nullptr, FColor::Emerald, 3.5f, true);
+	}
+
+	UE_LOG(LogThreadTalesLedgeDetector, Log, TEXT("[RadialScanner] Found %d coarse candidates. WINNER: %s (Dist=%.1f, Score=%.2f, Dir=%d, Tier=%d)"),
+		UnvalidatedCandidates.Num(), *OutBestCandidate.LedgeLocation.ToString(), OutBestCandidate.Distance, OutBestCandidate.Score,
+		(int32)OutBestCandidate.Direction, (int32)OutBestCandidate.DistanceType);
+
+	return true;
 }

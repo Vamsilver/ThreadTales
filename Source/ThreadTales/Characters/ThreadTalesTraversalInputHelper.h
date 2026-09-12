@@ -37,6 +37,11 @@ public:
 	static bool IsBackInputHeld(const APlayerController* PC);
 
 	/**
+	 * Queries whether jump input (Space / Gamepad Face Button Bottom) is currently held by the player.
+	 */
+	static bool IsJumpPressed(const APlayerController* PC);
+
+	/**
 	 * Queries whether sprint input is currently held by the player.
 	 */
 	static bool IsSprintHeld(const APlayerController* PC);
@@ -51,4 +56,21 @@ public:
 	 * Reads the current 2D movement input vector from the local Player Controller.
 	 */
 	static FVector2D GetMovementInputVector(const APlayerController* PC, const ACharacter* Character);
+
+	/**
+	 * Computes a normalized 3D world direction vector representing the player's climbing jump intent,
+	 * taking into account wall orientation (WallNormal, WallRight), WASD/Stick input, and back-jump modifiers.
+	 *
+	 * @param PC Local player controller to query input from
+	 * @param WallNormal Outward normal of the current wall face
+	 * @param WallRight Right tangent vector along the wall face
+	 * @param bBackJumpIntent If true, bias intent vector away from wall towards opposing walls
+	 * @return Normalized 3D world direction vector (or FVector::UpVector if neutral Space is pressed)
+	 */
+	static FVector GetClimbingIntentWorldVector(
+		const APlayerController* PC,
+		const FVector& WallNormal,
+		const FVector& WallRight,
+		bool bBackJumpIntent = false
+	);
 };

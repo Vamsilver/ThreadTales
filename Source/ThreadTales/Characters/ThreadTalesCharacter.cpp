@@ -484,6 +484,18 @@ void AThreadTalesCharacter::AddMovementInput(FVector WorldDirection, float Scale
 	Super::AddMovementInput(WorldDirection, ScaleValue, bForce);
 }
 
+void AThreadTalesCharacter::FaceRotation(FRotator NewControlRotation, float DeltaTime)
+{
+	if (TraversalComponent && TraversalComponent->IsLedgeClimbing())
+	{
+		// Suppress controller/camera rotation from rotating the actor while climbing on ledge.
+		// Ledge orientation is driven strictly by wall normal and kinematics.
+		return;
+	}
+
+	Super::FaceRotation(NewControlRotation, DeltaTime);
+}
+
 void AThreadTalesCharacter::Jump()
 {
 	if (TraversalComponent && TraversalComponent->IsLedgeClimbing())

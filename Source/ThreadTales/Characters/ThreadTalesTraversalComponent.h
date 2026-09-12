@@ -207,6 +207,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "ThreadTales|Traversal")
 	UAnimMontage* GetActiveCornerMontage(bool bLeft, EThreadTalesCornerType CornerType, bool bFreehang = false) const;
 
+	/** Returns the montage played when grabbing a ledge from the air (falls back to nullptr if not set) */
+	UFUNCTION(BlueprintPure, Category = "ThreadTales|Traversal")
+	UAnimMontage* GetActiveGrabMontage(bool bFreehang = false) const;
+
 	float GetHangWallOffset() const;
 	float GetHangHeightOffset() const;
 	float GetClimbAnimPlayRateMultiplier() const;

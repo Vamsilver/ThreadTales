@@ -19,6 +19,7 @@ FThreadTalesLedgeClimbingHandler::FThreadTalesLedgeClimbingHandler()
 	, bIsFreehang(false)
 	, bSavedUseControllerDesiredRotation(true)
 	, bSavedOrientRotationToMovement(false)
+	, bSavedUseControllerRotationYaw(false)
 	, CachedLedgeLocation(FVector::ZeroVector)
 	, CachedWallNormal(FVector::ZeroVector)
 	, CachedHangLocation(FVector::ZeroVector)
@@ -37,6 +38,7 @@ FThreadTalesLedgeClimbingHandler::FThreadTalesLedgeClimbingHandler()
 	, RegrabCooldownTimer(0.0f)
 	, ClimbingInputDebounceTimer(0.0f)
 	, ShimmyCooldownTimer(0.0f)
+	, ContinuousScanThrottleTimer(0.0f)
 {
 }
 
@@ -59,6 +61,10 @@ void FThreadTalesLedgeClimbingHandler::TickTimers(float DeltaTime)
 	{
 		ShimmyCooldownTimer -= DeltaTime;
 	}
+	if (ContinuousScanThrottleTimer > 0.0f)
+	{
+		ContinuousScanThrottleTimer -= DeltaTime;
+	}
 }
 
 bool FThreadTalesLedgeClimbingHandler::CanAttemptGrab(const UThreadTalesClimbingConfig* Config) const
@@ -74,23 +80,50 @@ void FThreadTalesLedgeClimbingHandler::Tick(float DeltaTime, UThreadTalesTravers
 		return;
 	}
 
-	// 1. If currently transitioning between ledges (Hop Up, Side Jump, Shimmy, CornerTransition), interpolate character
-	if (OwnerComp->GetTraversalState() == EThreadTalesTraversalState::LedgeClimbing && IsTransitioning())
+	// Always unconditionally suppress CMC and Controller rotation for ALL climbing states (IdleHang, GrabCatch, MantleUp, Shimmy, Jumps, Corners, ClimbDown)
+	if (OwnerComp->GetTraversalState() == EThreadTalesTraversalState::LedgeClimbing)
 	{
-		// Enforce CMC suppression for ALL transition types (including CornerTransition)
 		if (UCharacterMovementComponent* MoveComp = CharacterOwner->GetCharacterMovement())
 		{
 			MoveComp->bUseControllerDesiredRotation = false;
 			MoveComp->bOrientRotationToMovement = false;
 		}
+		CharacterOwner->bUseControllerRotationYaw = false;
+	}
 
+	// 1. If currently transitioning between ledges (Hop Up, Side Jump, Shimmy, CornerTransition), interpolate character
+	if (OwnerComp->GetTraversalState() == EThreadTalesTraversalState::LedgeClimbing && IsTransitioning())
+	{
 		TransitionTimer += DeltaTime;
-		const float NormalizedTime = FMath::Clamp(TransitionTimer / FMath::Max(TransitionDuration, 0.01f), 0.0f, 1.0f);
+		float NormalizedTime = FMath::Clamp(TransitionTimer / FMath::Max(TransitionDuration, 0.01f), 0.0f, 1.0f);
 
 		FVector NewLoc;
 		FRotator NewRot;
 
-		if (ClimbingSubState == EThreadTalesClimbingSubState::CornerTransition)
+		if (ClimbingSubState == EThreadTalesClimbingSubState::GrabCatch)
+		{
+			const float SnapDuration = FMath::Max(OwnerComp->ClimbingConfig ? OwnerComp->ClimbingConfig->GrabCatchDuration : 0.20f, 0.05f);
+			const float SnapNormalizedTime = FMath::Clamp(TransitionTimer / SnapDuration, 0.0f, 1.0f);
+			const float Alpha = FMath::InterpEaseOut(0.0f, 1.0f, SnapNormalizedTime, 2.5f);
+			NewLoc = FMath::Lerp(TransitionStartLocation, TransitionTargetLocation, Alpha);
+			NewRot = FQuat::Slerp(TransitionStartRotation.Quaternion(), TransitionTargetRotation.Quaternion(), Alpha).Rotator();
+
+			// Once body has reached the wall anchor (SnapNormalizedTime >= 1.0), allow responsive early break if player presses input
+			if (SnapNormalizedTime >= 1.0f && CharacterOwner->IsLocallyControlled())
+			{
+				if (APlayerController* PC = Cast<APlayerController>(CharacterOwner->GetController()))
+				{
+					bool bIsSprint = false;
+					const EThreadTalesLedgeJumpDirection JumpDir = FThreadTalesTraversalInputHelper::GetClimbingJumpDirection(PC, bIsSprint);
+					const float LateralSign = FThreadTalesTraversalInputHelper::GetLateralInputSign(PC);
+					if (JumpDir != EThreadTalesLedgeJumpDirection::None || LateralSign != 0.0f)
+					{
+						NormalizedTime = 1.0f;
+					}
+				}
+			}
+		}
+		else if (ClimbingSubState == EThreadTalesClimbingSubState::CornerTransition)
 		{
 			// Two-segment curved arc: Start → CornerApex → Target (safely rounds corner without cutting geometry)
 			FThreadTalesClimbingKinematics::CalculateCornerTransitionTransform(
@@ -137,6 +170,7 @@ void FThreadTalesLedgeClimbingHandler::Tick(float DeltaTime, UThreadTalesTravers
 
 		if (NormalizedTime >= 1.0f)
 		{
+			const bool bWasGrabCatch = (ClimbingSubState == EThreadTalesClimbingSubState::GrabCatch);
 			CameraHandler.Reset();
 			OwnerComp->SetClimbingSubState(EThreadTalesClimbingSubState::IdleHang);
 			ActiveCornerType = EThreadTalesCornerType::None;
@@ -145,8 +179,10 @@ void FThreadTalesLedgeClimbingHandler::Tick(float DeltaTime, UThreadTalesTravers
 			CachedHangLocation = TransitionTargetLocation;
 			CachedHangRotation = TransitionTargetRotation;
 
+			CharacterOwner->SetActorLocationAndRotation(CachedHangLocation, CachedHangRotation, false, nullptr, ETeleportType::TeleportPhysics);
+
 			bool bChainedShimmy = false;
-			if (CharacterOwner->IsLocallyControlled())
+			if (!bWasGrabCatch && CharacterOwner->IsLocallyControlled())
 			{
 				APlayerController* PC = Cast<APlayerController>(CharacterOwner->GetController());
 				const float NextDirSign = FThreadTalesTraversalInputHelper::GetLateralInputSign(PC);
@@ -165,8 +201,8 @@ void FThreadTalesLedgeClimbingHandler::Tick(float DeltaTime, UThreadTalesTravers
 
 			if (!bChainedShimmy)
 			{
-				ShimmyCooldownTimer = 0.08f;
-				ClimbingInputDebounceTimer = 0.35f;
+				ShimmyCooldownTimer = bWasGrabCatch ? 0.05f : 0.08f;
+				ClimbingInputDebounceTimer = bWasGrabCatch ? 0.10f : 0.35f;
 				CrossfadeToHangMontage(OwnerComp, CharacterOwner);
 			}
 		}
@@ -216,82 +252,16 @@ void FThreadTalesLedgeClimbingHandler::ProcessInput(const APlayerController* PC,
 		return;
 	}
 
-	const TArray<EThreadTalesLedgeJumpDistanceType> Priorities = FThreadTalesJumpConfigTable::GetDistancePriorities(bIsSprint);
+	const FVector Up = FVector::UpVector;
+	const FVector WallNorm2D = CachedWallNormal.GetSafeNormal();
+	const FVector WallRight = FVector::CrossProduct(WallNorm2D, Up).GetSafeNormal();
 
-	// Case A: Up
-	if (JumpDir == EThreadTalesLedgeJumpDirection::Up)
-	{
-		if (bIsSprint)
-		{
-			for (EThreadTalesLedgeJumpDistanceType DistType : { EThreadTalesLedgeJumpDistanceType::Long, EThreadTalesLedgeJumpDistanceType::Leap })
-			{
-				FVector TargetLedgeLoc;
-				FVector TargetWallNormal;
-				if (FThreadTalesLedgeDetector::FindLedgeInDirection(CharacterOwner, OwnerComp->ClimbingConfig, OwnerComp->bDrawDebugTraces, CachedLedgeLocation, CachedWallNormal, EThreadTalesLedgeJumpDirection::Up, DistType, JumpConfigTable, TargetLedgeLoc, TargetWallNormal))
-				{
-					ClimbingInputDebounceTimer = OwnerComp->GetJumpInputDebounceDuration();
-					PerformLedgeJump(EThreadTalesLedgeJumpDirection::Up, DistType, TargetLedgeLoc, TargetWallNormal, OwnerComp, CharacterOwner);
-					return;
-				}
-			}
-
-			FVector TargetStandingLoc;
-			if (FThreadTalesLedgeDetector::CanClimbUp(CharacterOwner, OwnerComp->ClimbingConfig, OwnerComp->bDrawDebugTraces, CachedLedgeLocation, CachedWallNormal, TargetStandingLoc))
-			{
-				ClimbingInputDebounceTimer = OwnerComp->GetJumpInputDebounceDuration();
-				ClimbUp(OwnerComp, CharacterOwner);
-				return;
-			}
-		}
-		else
-		{
-			for (EThreadTalesLedgeJumpDistanceType DistType : { EThreadTalesLedgeJumpDistanceType::Short, EThreadTalesLedgeJumpDistanceType::Long, EThreadTalesLedgeJumpDistanceType::Leap })
-			{
-				FVector TargetLedgeLoc;
-				FVector TargetWallNormal;
-				if (FThreadTalesLedgeDetector::FindLedgeInDirection(CharacterOwner, OwnerComp->ClimbingConfig, OwnerComp->bDrawDebugTraces, CachedLedgeLocation, CachedWallNormal, EThreadTalesLedgeJumpDirection::Up, DistType, JumpConfigTable, TargetLedgeLoc, TargetWallNormal))
-				{
-					ClimbingInputDebounceTimer = OwnerComp->GetJumpInputDebounceDuration();
-					PerformLedgeJump(EThreadTalesLedgeJumpDirection::Up, DistType, TargetLedgeLoc, TargetWallNormal, OwnerComp, CharacterOwner);
-					return;
-				}
-			}
-
-			FVector TargetStandingLoc;
-			if (FThreadTalesLedgeDetector::CanClimbUp(CharacterOwner, OwnerComp->ClimbingConfig, OwnerComp->bDrawDebugTraces, CachedLedgeLocation, CachedWallNormal, TargetStandingLoc))
-			{
-				ClimbingInputDebounceTimer = OwnerComp->GetJumpInputDebounceDuration();
-				ClimbUp(OwnerComp, CharacterOwner);
-				return;
-			}
-		}
-
-		ClimbingInputDebounceTimer = OwnerComp->GetJumpInputDebounceDuration();
-		return;
-	}
-
-	// Case B: Lateral
-	if (JumpDir == EThreadTalesLedgeJumpDirection::Right || JumpDir == EThreadTalesLedgeJumpDirection::Left)
+	// Lateral continuous movement priority (Shimmy & Corner Wrap when pressing strictly A or D without Sprint)
+	if (!bIsSprint && (JumpDir == EThreadTalesLedgeJumpDirection::Right || JumpDir == EThreadTalesLedgeJumpDirection::Left))
 	{
 		const float SideSign = (JumpDir == EThreadTalesLedgeJumpDirection::Right) ? 1.0f : -1.0f;
 
-		// 1. Directional jump across gaps (if sprint is held)
-		if (bIsSprint)
-		{
-			for (EThreadTalesLedgeJumpDistanceType DistType : Priorities)
-			{
-				FVector TargetLedgeLoc;
-				FVector TargetWallNormal;
-				if (FThreadTalesLedgeDetector::FindLedgeInDirection(CharacterOwner, OwnerComp->ClimbingConfig, OwnerComp->bDrawDebugTraces, CachedLedgeLocation, CachedWallNormal, JumpDir, DistType, JumpConfigTable, TargetLedgeLoc, TargetWallNormal))
-				{
-					ClimbingInputDebounceTimer = OwnerComp->GetJumpInputDebounceDuration();
-					PerformLedgeJump(JumpDir, DistType, TargetLedgeLoc, TargetWallNormal, OwnerComp, CharacterOwner);
-					return;
-				}
-			}
-		}
-
-		// 2. Regular continuous shimmy along the ledge (holding A or D)
+		// 1. Regular continuous shimmy along the ledge (holding A or D)
 		if (ShimmyCooldownTimer <= 0.0f)
 		{
 			FVector SideLedgeLoc;
@@ -305,7 +275,7 @@ void FThreadTalesLedgeClimbingHandler::ProcessInput(const APlayerController* PC,
 			}
 		}
 
-		// 3. Corner Wrapping fallback when the continuous ledge ends at a wall corner
+		// 2. Corner Wrapping fallback when continuous ledge ends at a wall corner
 		if (ShimmyCooldownTimer <= 0.0f)
 		{
 			EThreadTalesCornerType CornerType = EThreadTalesCornerType::None;
@@ -322,32 +292,61 @@ void FThreadTalesLedgeClimbingHandler::ProcessInput(const APlayerController* PC,
 				return;
 			}
 		}
+	}
 
+	// 3D Radial Ledge Scanner: compute 3D world intent vector and probe volumetric cone
+	const bool bIsDirectJumpPress = FThreadTalesTraversalInputHelper::IsJumpPressed(PC);
+	if (!bIsDirectJumpPress && ContinuousScanThrottleTimer > 0.0f)
+	{
 		return;
 	}
 
-	// Case C: Diagonal
-	if (JumpDir == EThreadTalesLedgeJumpDirection::UpRight || JumpDir == EThreadTalesLedgeJumpDirection::UpLeft ||
-		JumpDir == EThreadTalesLedgeJumpDirection::DownRight || JumpDir == EThreadTalesLedgeJumpDirection::DownLeft)
+	const FVector IntentWorldDir = FThreadTalesTraversalInputHelper::GetClimbingIntentWorldVector(PC, CachedWallNormal, WallRight, false);
+
+	// Throttle continuous scanning to ~12.5 Hz (0.08s default) while holding stick/keys in IdleHang
+	ContinuousScanThrottleTimer = OwnerComp->ClimbingConfig ? OwnerComp->ClimbingConfig->RadialScanContinuousThrottleInterval : 0.08f;
+
+	FThreadTalesLedgeCandidate BestCandidate;
+	if (FThreadTalesLedgeDetector::FindBestLedgeInCone(
+			CharacterOwner, OwnerComp->ClimbingConfig, OwnerComp->bDrawDebugTraces,
+			CachedLedgeLocation, CachedWallNormal,
+			IntentWorldDir, JumpConfigTable, BestCandidate))
 	{
-		for (EThreadTalesLedgeJumpDistanceType DistType : Priorities)
+		ClimbingInputDebounceTimer = OwnerComp->GetJumpInputDebounceDuration();
+		ContinuousScanThrottleTimer = 0.0f;
+		PerformLedgeJump(BestCandidate.Direction, BestCandidate.DistanceType, BestCandidate.LedgeLocation, BestCandidate.WallNormal, OwnerComp, CharacterOwner);
+		return;
+	}
+
+	// Secondary Fallbacks:
+	// A. If Up / Space was pressed, test classic FindLedgeInDirection for upper ledge, then CanClimbUp
+	if (JumpDir == EThreadTalesLedgeJumpDirection::Up)
+	{
+		for (EThreadTalesLedgeJumpDistanceType DistType : { EThreadTalesLedgeJumpDistanceType::Short, EThreadTalesLedgeJumpDistanceType::Long, EThreadTalesLedgeJumpDistanceType::Leap })
 		{
 			FVector TargetLedgeLoc;
 			FVector TargetWallNormal;
-			if (FThreadTalesLedgeDetector::FindLedgeInDirection(CharacterOwner, OwnerComp->ClimbingConfig, OwnerComp->bDrawDebugTraces, CachedLedgeLocation, CachedWallNormal, JumpDir, DistType, JumpConfigTable, TargetLedgeLoc, TargetWallNormal))
+			if (FThreadTalesLedgeDetector::FindLedgeInDirection(CharacterOwner, OwnerComp->ClimbingConfig, OwnerComp->bDrawDebugTraces, CachedLedgeLocation, CachedWallNormal, EThreadTalesLedgeJumpDirection::Up, DistType, JumpConfigTable, TargetLedgeLoc, TargetWallNormal))
 			{
 				ClimbingInputDebounceTimer = OwnerComp->GetJumpInputDebounceDuration();
-				PerformLedgeJump(JumpDir, DistType, TargetLedgeLoc, TargetWallNormal, OwnerComp, CharacterOwner);
+				PerformLedgeJump(EThreadTalesLedgeJumpDirection::Up, DistType, TargetLedgeLoc, TargetWallNormal, OwnerComp, CharacterOwner);
 				return;
 			}
 		}
-		return;
+
+		FVector TargetStandingLoc;
+		if (FThreadTalesLedgeDetector::CanClimbUp(CharacterOwner, OwnerComp->ClimbingConfig, OwnerComp->bDrawDebugTraces, CachedLedgeLocation, CachedWallNormal, TargetStandingLoc))
+		{
+			ClimbingInputDebounceTimer = OwnerComp->GetJumpInputDebounceDuration();
+			ClimbUp(OwnerComp, CharacterOwner);
+			return;
+		}
 	}
 
-	// Case D: Down
+	// B. If Down was pressed, test classic FindLedgeInDirection for lower ledge, then BackJump
 	if (JumpDir == EThreadTalesLedgeJumpDirection::Down)
 	{
-		for (EThreadTalesLedgeJumpDistanceType DistType : Priorities)
+		for (EThreadTalesLedgeJumpDistanceType DistType : { EThreadTalesLedgeJumpDistanceType::Short, EThreadTalesLedgeJumpDistanceType::Long, EThreadTalesLedgeJumpDistanceType::Leap })
 		{
 			FVector TargetLedgeLoc;
 			FVector TargetWallNormal;
@@ -365,9 +364,26 @@ void FThreadTalesLedgeClimbingHandler::ProcessInput(const APlayerController* PC,
 			PerformBackJump(OwnerComp, CharacterOwner);
 			return;
 		}
-
-		return;
 	}
+
+	// C. If Diagonals or Lateral jump across gaps
+	if (JumpDir != EThreadTalesLedgeJumpDirection::None && JumpDir != EThreadTalesLedgeJumpDirection::Up && JumpDir != EThreadTalesLedgeJumpDirection::Down)
+	{
+		const TArray<EThreadTalesLedgeJumpDistanceType> Priorities = FThreadTalesJumpConfigTable::GetDistancePriorities(bIsSprint);
+		for (EThreadTalesLedgeJumpDistanceType DistType : Priorities)
+		{
+			FVector TargetLedgeLoc;
+			FVector TargetWallNormal;
+			if (FThreadTalesLedgeDetector::FindLedgeInDirection(CharacterOwner, OwnerComp->ClimbingConfig, OwnerComp->bDrawDebugTraces, CachedLedgeLocation, CachedWallNormal, JumpDir, DistType, JumpConfigTable, TargetLedgeLoc, TargetWallNormal))
+			{
+				ClimbingInputDebounceTimer = OwnerComp->GetJumpInputDebounceDuration();
+				PerformLedgeJump(JumpDir, DistType, TargetLedgeLoc, TargetWallNormal, OwnerComp, CharacterOwner);
+				return;
+			}
+		}
+	}
+
+	ClimbingInputDebounceTimer = OwnerComp->GetJumpInputDebounceDuration();
 }
 
 void FThreadTalesLedgeClimbingHandler::HandleJumpInput(const APlayerController* PC, UThreadTalesTraversalComponent* OwnerComp, AThreadTalesCharacter* CharacterOwner)
@@ -384,8 +400,9 @@ void FThreadTalesLedgeClimbingHandler::HandleJumpInput(const APlayerController* 
 		return;
 	}
 
-	// Reset debounce so immediate Space press is responsive and processes directional jump or mantle
+	// Reset debounce and throttle so immediate Space press is responsive and processes directional jump or mantle
 	ClimbingInputDebounceTimer = 0.0f;
+	ContinuousScanThrottleTimer = 0.0f;
 	ProcessInput(PC, OwnerComp, CharacterOwner);
 }
 
@@ -398,7 +415,6 @@ void FThreadTalesLedgeClimbingHandler::StartLedgeClimb(const FVector& LedgeLocat
 
 	bIsFreehang = FThreadTalesLedgeDetector::CheckIsFreehangLedge(CharacterOwner, OwnerComp->ClimbingConfig, OwnerComp->bDrawDebugTraces, LedgeLocation, WallNormal);
 	OwnerComp->SetIsFreehang(bIsFreehang);
-	OwnerComp->SetClimbingSubState(EThreadTalesClimbingSubState::IdleHang);
 	CachedLedgeLocation = LedgeLocation;
 	CachedWallNormal = WallNormal;
 
@@ -410,20 +426,53 @@ void FThreadTalesLedgeClimbingHandler::StartLedgeClimb(const FVector& LedgeLocat
 
 	if (UCharacterMovementComponent* MoveComp = CharacterOwner->GetCharacterMovement())
 	{
+		bSavedUseControllerDesiredRotation = MoveComp->bUseControllerDesiredRotation;
+		bSavedOrientRotationToMovement = MoveComp->bOrientRotationToMovement;
+		bSavedUseControllerRotationYaw = CharacterOwner->bUseControllerRotationYaw;
+
 		MoveComp->Velocity = FVector::ZeroVector;
 		MoveComp->SetMovementMode(MOVE_Flying);
+		MoveComp->bUseControllerDesiredRotation = false;
+		MoveComp->bOrientRotationToMovement = false;
+		CharacterOwner->bUseControllerRotationYaw = false;
 	}
 
-	CharacterOwner->SetActorLocationAndRotation(CachedHangLocation, CachedHangRotation, false, nullptr, ETeleportType::TeleportPhysics);
-	CrossfadeToHangMontage(OwnerComp, CharacterOwner);
+	StopAllClimbingMontages(CharacterOwner);
 
-	if (!CharacterOwner->HasAuthority())
+	TransitionStartLocation = CharacterOwner->GetActorLocation();
+	TransitionStartRotation = CharacterOwner->GetActorRotation();
+	TransitionTargetLocation = CachedHangLocation;
+	TransitionTargetRotation = CachedHangRotation;
+	PendingTargetLedgeLocation = LedgeLocation;
+	PendingTargetWallNormal = WallNormal;
+	TransitionTimer = 0.0f;
+
+	UAnimMontage* GrabMontage = OwnerComp->GetActiveGrabMontage(bIsFreehang);
+	if (GrabMontage)
 	{
-		OwnerComp->Server_StartLedgeClimb(LedgeLocation, WallNormal);
+		const float BlendOut = GrabMontage->BlendOut.GetBlendTime() > 0.0f ? GrabMontage->BlendOut.GetBlendTime() : 0.20f;
+		TransitionDuration = FMath::Max(GrabMontage->GetPlayLength() - BlendOut, 0.15f);
+		CharacterOwner->PlayAnimMontage(GrabMontage, OwnerComp->GetClimbAnimPlayRateMultiplier());
 	}
 	else
 	{
-		OwnerComp->Multicast_StartLedgeClimb(LedgeLocation, WallNormal);
+		const UThreadTalesClimbingConfig* Config = OwnerComp->ClimbingConfig;
+		TransitionDuration = Config ? Config->GrabCatchDuration : 0.20f;
+		CrossfadeToHangMontage(OwnerComp, CharacterOwner);
+	}
+
+	OwnerComp->SetClimbingSubState(EThreadTalesClimbingSubState::GrabCatch);
+
+	if (CharacterOwner->IsLocallyControlled())
+	{
+		if (!CharacterOwner->HasAuthority())
+		{
+			OwnerComp->Server_StartLedgeClimb(LedgeLocation, WallNormal);
+		}
+		else
+		{
+			OwnerComp->Multicast_StartLedgeClimb(LedgeLocation, WallNormal);
+		}
 	}
 }
 
@@ -448,6 +497,7 @@ void FThreadTalesLedgeClimbingHandler::ReleaseLedge(UThreadTalesTraversalCompone
 		MoveComp->bOrientRotationToMovement = bSavedOrientRotationToMovement;
 		MoveComp->SetMovementMode(MOVE_Falling);
 	}
+	CharacterOwner->bUseControllerRotationYaw = bSavedUseControllerRotationYaw;
 
 	OwnerComp->SetTraversalState(EThreadTalesTraversalState::None);
 	RegrabCooldownTimer = OwnerComp->GetRegrabCooldownDuration();
@@ -470,8 +520,8 @@ void FThreadTalesLedgeClimbingHandler::Internal_StartTransition(UAnimMontage* Mo
 	}
 
 	CameraHandler.Reset();
-	TransitionStartLocation = CharacterOwner->GetActorLocation();
-	TransitionStartRotation = CharacterOwner->GetActorRotation();
+	TransitionStartLocation = CachedHangLocation.IsNearlyZero() ? CharacterOwner->GetActorLocation() : CachedHangLocation;
+	TransitionStartRotation = CachedHangRotation.IsNearlyZero() ? CharacterOwner->GetActorRotation() : CachedHangRotation;
 
 	const FRotator TargetFaceWallRot = (-TargetWallNormal).Rotation();
 	TransitionTargetRotation = FRotator(0.0f, TargetFaceWallRot.Yaw, 0.0f);
@@ -496,7 +546,11 @@ void FThreadTalesLedgeClimbingHandler::Internal_StartTransition(UAnimMontage* Mo
 	{
 		MoveComp->Velocity = FVector::ZeroVector;
 		MoveComp->SetMovementMode(MOVE_Flying);
+		MoveComp->bUseControllerDesiredRotation = false;
+		MoveComp->bOrientRotationToMovement = false;
 	}
+	CharacterOwner->bUseControllerRotationYaw = false;
+	CharacterOwner->SetActorLocationAndRotation(TransitionStartLocation, TransitionStartRotation, false, nullptr, ETeleportType::TeleportPhysics);
 
 	const UThreadTalesClimbingConfig* Config = OwnerComp->ClimbingConfig;
 	float FinalPlayRate = FMath::Max(OwnerComp->GetClimbAnimPlayRateMultiplier(), 0.1f);
@@ -674,8 +728,13 @@ void FThreadTalesLedgeClimbingHandler::ClimbUp(UThreadTalesTraversalComponent* O
 
 	if (UCharacterMovementComponent* MoveComp = CharacterOwner->GetCharacterMovement())
 	{
+		MoveComp->bUseControllerDesiredRotation = false;
+		MoveComp->bOrientRotationToMovement = false;
+		MoveComp->Velocity = FVector::ZeroVector;
 		MoveComp->SetMovementMode(MOVE_Flying);
 	}
+	CharacterOwner->bUseControllerRotationYaw = false;
+	CharacterOwner->SetActorLocationAndRotation(CachedHangLocation, CachedHangRotation, false, nullptr, ETeleportType::TeleportPhysics);
 
 	UAnimMontage* MontageToPlay = OwnerComp->GetActiveClimbOnTopMontage(bIsFreehang);
 	if (MontageToPlay)
@@ -749,8 +808,10 @@ bool FThreadTalesLedgeClimbingHandler::TryClimbDown(UThreadTalesTraversalCompone
 	OwnerComp->SetTraversalState(EThreadTalesTraversalState::LedgeClimbing);
 	bSavedUseControllerDesiredRotation = MoveComp->bUseControllerDesiredRotation;
 	bSavedOrientRotationToMovement = MoveComp->bOrientRotationToMovement;
+	bSavedUseControllerRotationYaw = CharacterOwner->bUseControllerRotationYaw;
 	MoveComp->bUseControllerDesiredRotation = false;
 	MoveComp->bOrientRotationToMovement = false;
+	CharacterOwner->bUseControllerRotationYaw = false;
 	MoveComp->Velocity = FVector::ZeroVector;
 	MoveComp->SetMovementMode(MOVE_Flying);
 
@@ -878,6 +939,7 @@ void FThreadTalesLedgeClimbingHandler::WallEject(UThreadTalesTraversalComponent*
 		MoveComp->SetMovementMode(MOVE_Falling);
 		MoveComp->Velocity = FThreadTalesClimbingKinematics::CalculateWallEjectVelocity(CachedWallNormal, OwnerComp->ClimbingConfig);
 	}
+	CharacterOwner->bUseControllerRotationYaw = bSavedUseControllerRotationYaw;
 
 	OwnerComp->SetTraversalState(EThreadTalesTraversalState::None);
 	RegrabCooldownTimer = OwnerComp->GetWallEjectRegrabCooldown();
@@ -893,8 +955,16 @@ void FThreadTalesLedgeClimbingHandler::CrossfadeToHangMontage(UThreadTalesTraver
 	UAnimMontage* ActiveHangMont = OwnerComp->GetActiveHangMontage(bIsFreehang);
 	if (ActiveHangMont)
 	{
+		if (UAnimInstance* AnimInst = CharacterOwner->GetMesh() ? CharacterOwner->GetMesh()->GetAnimInstance() : nullptr)
+		{
+			if (AnimInst->Montage_IsPlaying(ActiveHangMont))
+			{
+				return;
+			}
+		}
+
 		CharacterOwner->PlayAnimMontage(ActiveHangMont);
-		if (UAnimInstance* AnimInst = CharacterOwner->GetMesh()->GetAnimInstance())
+		if (UAnimInstance* AnimInst = CharacterOwner->GetMesh() ? CharacterOwner->GetMesh()->GetAnimInstance() : nullptr)
 		{
 			AnimInst->Montage_SetNextSection(FName("Default"), FName("Default"), ActiveHangMont);
 		}
@@ -952,6 +1022,9 @@ void FThreadTalesLedgeClimbingHandler::OnClimbMontageEnded(UAnimMontage* Montage
 			if (MoveComp->MovementMode != MOVE_Walking)
 			{
 				MoveComp->Velocity = FVector::ZeroVector;
+				MoveComp->bUseControllerDesiredRotation = bSavedUseControllerDesiredRotation;
+				MoveComp->bOrientRotationToMovement = bSavedOrientRotationToMovement;
+				CharacterOwner->bUseControllerRotationYaw = bSavedUseControllerRotationYaw;
 				MoveComp->SetMovementMode(MOVE_Walking);
 			}
 		}
@@ -1000,6 +1073,7 @@ void FThreadTalesLedgeClimbingHandler::OnClimbMontageBlendingOut(UAnimMontage* M
 			MoveComp->Velocity = FVector::ZeroVector;
 			MoveComp->bUseControllerDesiredRotation = bSavedUseControllerDesiredRotation;
 			MoveComp->bOrientRotationToMovement = bSavedOrientRotationToMovement;
+			CharacterOwner->bUseControllerRotationYaw = bSavedUseControllerRotationYaw;
 			MoveComp->SetMovementMode(MOVE_Walking);
 		}
 	}

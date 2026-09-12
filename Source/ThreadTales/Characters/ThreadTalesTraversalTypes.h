@@ -61,6 +61,7 @@ enum class EThreadTalesClimbingSubState : uint8
 	MantleUp         UMETA(DisplayName = "Mantle Up"),
 	ClimbDown        UMETA(DisplayName = "Climb Down"),
 	CornerTransition UMETA(DisplayName = "Corner Transition"),
+	GrabCatch        UMETA(DisplayName = "Grab Catch"),
 };
 
 /**
@@ -95,4 +96,37 @@ struct FThreadTalesLedgeJumpConfig
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "ThreadTales|Traversal|MultiLedge")
 	float NominalDistance = 48.1f;
+};
+
+/**
+ * Candidate ledge detected by the 3D Radial Ledge Scanner.
+ * Holds exact 3D geometry, classified direction/tier, and heuristic ranking score.
+ */
+USTRUCT(BlueprintType)
+struct FThreadTalesLedgeCandidate
+{
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "ThreadTales|Traversal|Scanner")
+	FVector LedgeLocation = FVector::ZeroVector;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "ThreadTales|Traversal|Scanner")
+	FVector WallNormal = FVector::ZeroVector;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "ThreadTales|Traversal|Scanner")
+	EThreadTalesLedgeJumpDirection Direction = EThreadTalesLedgeJumpDirection::None;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "ThreadTales|Traversal|Scanner")
+	EThreadTalesLedgeJumpDistanceType DistanceType = EThreadTalesLedgeJumpDistanceType::Short;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "ThreadTales|Traversal|Scanner")
+	float Distance = 0.0f;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "ThreadTales|Traversal|Scanner")
+	float Score = 0.0f;
+
+	bool IsValid() const
+	{
+		return !LedgeLocation.IsNearlyZero() && Direction != EThreadTalesLedgeJumpDirection::None;
+	}
 };
