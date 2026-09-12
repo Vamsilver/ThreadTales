@@ -8,6 +8,8 @@
 #include "Characters/ThreadTalesTraversalTypes.h"
 #include "Characters/ThreadTalesClimbingKinematics.h"
 #include "Characters/ThreadTalesLedgeDetector.h"
+#include "Characters/ThreadTalesLedgeClimbingHandler.h"
+#include "Characters/ThreadTalesTraversalInputHelper.h"
 #include "ThreadTalesTraversalComponent.generated.h"
 
 class AThreadTalesCharacter;
@@ -20,7 +22,8 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnTraversalStateChangedDelegate, E
 /**
  * Core coordinator component for character traversal and climbing mechanics.
  * Manages character movement state, replication, GAS tags, climbing inputs, and animation RPCs.
- * Delegates world sensing to FThreadTalesLedgeDetector and kinematic interpolation to FThreadTalesClimbingKinematics.
+ * Delegates world sensing to FThreadTalesLedgeDetector, kinematic interpolation to FThreadTalesClimbingKinematics,
+ * and ledge climbing execution to FThreadTalesLedgeClimbingHandler.
  */
 UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
 class THREADTALES_API UThreadTalesTraversalComponent : public UActorComponent
@@ -56,19 +59,21 @@ public:
 	EThreadTalesTraversalState GetTraversalState() const { return CurrentTraversalState; }
 
 	UFUNCTION(BlueprintPure, Category = "ThreadTales|Traversal")
-	EThreadTalesClimbingSubState GetClimbingSubState() const { return ClimbingSubState; }
+	EThreadTalesClimbingSubState GetClimbingSubState() const { return LedgeHandler.GetClimbingSubState(); }
 
 	UFUNCTION(BlueprintPure, Category = "ThreadTales|Traversal")
 	bool IsLedgeClimbing() const { return CurrentTraversalState == EThreadTalesTraversalState::LedgeClimbing; }
 
 	UFUNCTION(BlueprintPure, Category = "ThreadTales|Traversal")
-	bool IsHanging() const { return CurrentTraversalState == EThreadTalesTraversalState::LedgeClimbing && ClimbingSubState == EThreadTalesClimbingSubState::IdleHang; }
+	bool IsHanging() const { return CurrentTraversalState == EThreadTalesTraversalState::LedgeClimbing && LedgeHandler.IsHanging(); }
 
 	UFUNCTION(BlueprintPure, Category = "ThreadTales|Traversal")
-	bool IsTransitioning() const { return ClimbingSubState == EThreadTalesClimbingSubState::JumpTransition || ClimbingSubState == EThreadTalesClimbingSubState::Shimmying; }
+	bool IsTransitioning() const { return LedgeHandler.IsTransitioning(); }
 
 	UFUNCTION(BlueprintPure, Category = "ThreadTales|Traversal")
 	bool IsFreehang() const { return bIsFreehang; }
+
+	void SetIsFreehang(bool bInFreehang) { bIsFreehang = bInFreehang; LedgeHandler.SetIsFreehang(bInFreehang); }
 
 	// ==========================================
 	// PUBLIC CLIMBING ACTIONS (BLUEPRINT API)
@@ -204,46 +209,9 @@ public:
 	float GetRegrabCooldownDuration() const;
 	float GetWallEjectRegrabCooldown() const;
 
-protected:
-	virtual void BeginPlay() override;
-
-	UPROPERTY(ReplicatedUsing = OnRep_TraversalState, VisibleInstanceOnly, BlueprintReadOnly, Category = "ThreadTales|Traversal|State")
-	EThreadTalesTraversalState CurrentTraversalState;
-
-	UPROPERTY(Replicated, VisibleInstanceOnly, BlueprintReadOnly, Category = "ThreadTales|Traversal|State")
-	bool bIsFreehang;
-
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "ThreadTales|Traversal|State")
-	EThreadTalesClimbingSubState ClimbingSubState;
-
-	UFUNCTION()
-	void OnRep_TraversalState(EThreadTalesTraversalState OldState);
-
 	void SetTraversalState(EThreadTalesTraversalState NewState);
-	void SetClimbingSubState(EThreadTalesClimbingSubState NewSubState);
 
-	void Internal_StartTransition(UAnimMontage* MontageToPlay, const FVector& TargetLedgeLoc, const FVector& TargetWallNormal, float CustomDuration = -1.0f, EThreadTalesLedgeJumpDistanceType DistanceType = EThreadTalesLedgeJumpDistanceType::Short);
-
-	void StartClimbDown(const FVector& LedgeLoc, const FVector& WallNormal2D, bool bFreehang);
-	void SetClimbDownCollision(bool bEnable);
-
-	void CrossfadeToHangMontage();
-	void StopAllClimbingMontages();
-
-	// Montage End / BlendOut Callbacks
-	UFUNCTION()
-	void OnClimbMontageEnded(UAnimMontage* Montage, bool bInterrupted);
-
-	UFUNCTION()
-	void OnClimbMontageBlendingOut(UAnimMontage* Montage, bool bInterrupted);
-
-	UFUNCTION()
-	void OnClimbDownMontageEnded(UAnimMontage* Montage, bool bInterrupted);
-
-	UFUNCTION()
-	void OnClimbDownMontageBlendingOut(UAnimMontage* Montage, bool bInterrupted);
-
-	// Network RPCs
+	// Network RPCs (called by LedgeHandler)
 	UFUNCTION(Server, Reliable)
 	void Server_StartLedgeClimb(const FVector& LedgeLocation, const FVector& WallNormal);
 
@@ -298,34 +266,37 @@ protected:
 	UFUNCTION(NetMulticast, Reliable)
 	void Multicast_WallEject();
 
+	// Montage End / BlendOut Callbacks
+	UFUNCTION()
+	void OnClimbMontageEnded(UAnimMontage* Montage, bool bInterrupted);
+
+	UFUNCTION()
+	void OnClimbMontageBlendingOut(UAnimMontage* Montage, bool bInterrupted);
+
+	UFUNCTION()
+	void OnClimbDownMontageEnded(UAnimMontage* Montage, bool bInterrupted);
+
+	UFUNCTION()
+	void OnClimbDownMontageBlendingOut(UAnimMontage* Montage, bool bInterrupted);
+
+protected:
+	virtual void BeginPlay() override;
+
+	UPROPERTY(ReplicatedUsing = OnRep_TraversalState, VisibleInstanceOnly, BlueprintReadOnly, Category = "ThreadTales|Traversal|State")
+	EThreadTalesTraversalState CurrentTraversalState;
+
+	UPROPERTY(Replicated, VisibleInstanceOnly, BlueprintReadOnly, Category = "ThreadTales|Traversal|State")
+	bool bIsFreehang;
+
+	UFUNCTION()
+	void OnRep_TraversalState(EThreadTalesTraversalState OldState);
+
 private:
 	UPROPERTY()
 	TObjectPtr<AThreadTalesCharacter> CharacterOwner;
 
-	// Cached Anchors
-	FVector CachedLedgeLocation;
-	FVector CachedWallNormal;
-	FVector CachedHangLocation;
-	FRotator CachedHangRotation;
+	// Dedicated Ledge Climbing Mode Handler
+	FThreadTalesLedgeClimbingHandler LedgeHandler;
 
-	// Transition interpolation state
-	FVector TransitionStartLocation;
-	FVector TransitionTargetLocation;
-	FRotator TransitionStartRotation;
-	FRotator TransitionTargetRotation;
-
-	FVector PendingTargetLedgeLocation;
-	FVector PendingTargetWallNormal;
-
-	EThreadTalesLedgeJumpDistanceType TransitionDistanceType;
-	float TransitionTimer;
-	float TransitionDuration;
-
-	// Cooldown & debounce timers
-	float RegrabCooldownTimer;
-	float ClimbingInputDebounceTimer;
-	float ShimmyCooldownTimer;
-
-	// Directional jump table lookup
-	FThreadTalesJumpConfigTable JumpConfigTable;
+	friend class FThreadTalesLedgeClimbingHandler;
 };

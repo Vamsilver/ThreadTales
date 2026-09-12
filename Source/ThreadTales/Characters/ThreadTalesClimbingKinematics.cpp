@@ -204,24 +204,23 @@ TArray<EThreadTalesLedgeJumpDistanceType> FThreadTalesJumpConfigTable::GetDistan
 
 void FThreadTalesJumpConfigTable::GetKinematicPhases(EThreadTalesLedgeJumpDistanceType DistanceType, const UThreadTalesClimbingConfig* Config, float& OutAnticipationEnd, float& OutFlightEnd)
 {
-	const float FlightEndRatio = Config ? Config->JumpFlightEndRatio : 0.85f;
 	switch (DistanceType)
 	{
-	case EThreadTalesLedgeJumpDistanceType::Short:
-		OutAnticipationEnd = 0.18f;
-		OutFlightEnd = FlightEndRatio;
+	case EThreadTalesLedgeJumpDistanceType::Leap:
+		// Leap animations (1.50s): Anticipation up to 0.17s, flight 0.17s .. 0.67s, landing/settle 0.67s .. 1.0
+		OutAnticipationEnd = 0.17f;
+		OutFlightEnd = 0.67f;
 		break;
 	case EThreadTalesLedgeJumpDistanceType::Long:
-		OutAnticipationEnd = 0.20f;
-		OutFlightEnd = FlightEndRatio;
+		// Long animations (1.20s): Anticipation up to 0.18s, flight 0.18s .. 0.75s, landing/settle 0.75s .. 1.0
+		OutAnticipationEnd = 0.18f;
+		OutFlightEnd = 0.75f;
 		break;
-	case EThreadTalesLedgeJumpDistanceType::Leap:
-		OutAnticipationEnd = 0.22f;
-		OutFlightEnd = FMath::Min(FlightEndRatio + 0.05f, 0.92f);
-		break;
+	case EThreadTalesLedgeJumpDistanceType::Short:
 	default:
+		// Short animations (0.95s): Anticipation up to 0.19s, flight 0.19s .. 0.78s, landing/settle 0.78s .. 1.0
 		OutAnticipationEnd = 0.19f;
-		OutFlightEnd = FlightEndRatio;
+		OutFlightEnd = 0.78f;
 		break;
 	}
 }
@@ -284,7 +283,7 @@ void FThreadTalesClimbingKinematics::CalculateClimbDownPreAlignment(
 	FRotator& OutStartRot)
 {
 	const float HangWallOffset = Config ? Config->HangWallOffset : 24.0f;
-	const float HangHeightOffset = Config ? Config->HangHeightOffset : 73.0f;
+	const float HangHeightOffset = Config ? Config->HangHeightOffset : 70.0f;
 	const float RootMotionFwd = Config ? Config->ClimbDownRootMotionForwardOffset : 72.2f;
 	const float RootMotionDown = Config ? Config->ClimbDownRootMotionDownwardOffset : 171.32f;
 

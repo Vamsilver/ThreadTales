@@ -139,7 +139,8 @@ public:
 		const FHitResult& WallHit,
 		const FVector& WallNormal2D,
 		float FeetZ,
-		FVector& OutEdgeLoc
+		FVector& OutEdgeLoc,
+		FVector& OutRefinedWallNormal
 	);
 
 	/** Checks whether character can mantle on top of the current ledge (no wall above, solid floor, standing space) */
@@ -150,5 +151,16 @@ public:
 		const FVector& CurrentLedgeLoc,
 		const FVector& CurrentWallNormal,
 		FVector& OutStandingLoc
+	);
+
+	/** Searches behind the character's back for an opposing wall/ledge to jump onto */
+	static bool FindOpposingLedge(
+		const ACharacter* Character,
+		const UThreadTalesClimbingConfig* Config,
+		bool bDrawDebugTraces,
+		const FVector& CurrentLedgeLoc,
+		const FVector& CurrentWallNormal,
+		FVector& OutLedgeLoc,
+		FVector& OutWallNormal
 	);
 };
