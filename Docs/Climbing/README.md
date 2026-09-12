@@ -43,12 +43,17 @@
 ┌───┴──────────┐ ┌─────────┐ ┌─────────┴─────────┐
 │JumpTransition│ │Shimmying│ │    ClimbDown      │
 └──────────────┘ └─────────┘ └───────────────────┘
-                      │
-                      │ (W / Space у вершины)
-                      ▼
-                 ┌─────────┐
-                 │MantleUp │ ──► (Выход на ноги в MOVE_Walking)
-                 └─────────┘
+       │               │
+       │               │ (A/D у края стены без непрерывного уступа)
+       │               ▼
+       │      ┌──────────────────┐
+       │      │ CornerTransition │ ──► (двухсегм. дуга Start→Pivot→Target)
+       │      └──────────────────┘
+       │               │ (W / Space у вершины)
+       ▼               ▼
+  ┌─────────┐  ┌─────────┐
+  │MantleUp │  │MantleUp │ ──► (Выход на ноги в MOVE_Walking)
+  └─────────┘  └─────────┘
 ```
 
 | Подсостояние | Значение | Описание |
@@ -59,6 +64,7 @@
 | `JumpTransition` | 3 | Кинематический направленный прыжок (Short, Long, Leap) |
 | `MantleUp` | 4 | Залезание на платформу по Root Motion |
 | `ClimbDown` | 5 | Спуск с платформы в вис по Root Motion |
+| `CornerTransition` | 6 | Огибание внешнего/внутреннего угла стены: двухсегментная дуга `Start → CornerPivot → Target` |
 
 ---
 
@@ -70,6 +76,7 @@
 | **Подъем на крышу (Mantle)** | `Space` / `W` (у края крыши) | Залезание на ноги через Root Motion (`MD_climb_up_ALS1_Montage`) |
 | **Прыжок вверх (Hop Up)** | `Space` / `W` (есть уступ выше) | Прыжок на верхний ярус уступа |
 | **Перебор рук (Shimmy)** | Удержание `A` или `D` | Шаги вдоль непрерывной полки с кулдауном 0.55с |
+| **Огибание угла (Corner Wrap)** | `A` или `D` у края стены | Если `FindSideLedge=false` и `ProbeCornerLedge=true` — двухсегментный угловой переход |
 | **Прыжок в сторону** | `A + Space` / `D + Space` | Прыжок на соседний блок/уступ через разрыв стены |
 | **Прыжок назад / Отскок** | `S + Space` (или `Shift + S`) | Поиск встречного уступа сзади. Если найден — прыжок назад; если нет — отскок `WallEject` |
 | **Спуск с края крыши** | `C` (стоя у кромки пола) | Плавный разворот на 180° и спуск в вис на руках |
@@ -80,13 +87,13 @@
 ## 4. Сетевая синхронизация (Replication & RPCs)
 
 1. `CurrentTraversalState` реплицируется через `DOREPLIFETIME` + `OnRep_TraversalState`.
-2. Клиент отправляет Server RPC: `Server_StartLedgeClimb`, `Server_LedgeJump`, `Server_StartShimmy`, `Server_ClimbUp`, `Server_ClimbDown`, `Server_WallEject`, `Server_ReleaseLedge`.
+2. Клиент отправляет Server RPC: `Server_StartLedgeClimb`, `Server_LedgeJump`, `Server_StartShimmy`, `Server_ClimbUp`, `Server_ClimbDown`, `Server_WallEject`, `Server_ReleaseLedge`, `Server_StartCornerTransition`.
 3. Сервер транслирует Multicast RPC для воспроизведения на всех клиентах.
 
 ---
 
 ## 5. Дочерние разделы
 
-* [Spatial Detection Pipeline](file:///Y:/UnrealProjects/ThreadTales/Docs/Climbing/Detection.md) — Алгоритмы сканирования, 6 фаз детекта, ClimbDown, BackJump.
-* [Kinematics & Jump Tables](file:///Y:/UnrealProjects/ThreadTales/Docs/Climbing/Kinematics.md) — Таблица прыжков 8 направлений, формулы скоростей и IK.
+* [Spatial Detection Pipeline](file:///Y:/UnrealProjects/ThreadTales/Docs/Climbing/Detection.md) — Алгоритмы сканирования, 6 фаз детекта, ClimbDown, BackJump, ProbeCornerLedge.
+* [Kinematics & Jump Tables](file:///Y:/UnrealProjects/ThreadTales/Docs/Climbing/Kinematics.md) — Таблица прыжков 8 направлений, формулы скоростей и IK, двухсегментная дуга Corner.
 * [Traps, Invariants & Bugfixes](file:///Y:/UnrealProjects/ThreadTales/Docs/Climbing/Traps_And_Fixes.md) — Реестр критических правил и устранённых багов.
