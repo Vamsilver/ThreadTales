@@ -175,6 +175,11 @@ void AThreadTalesCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInp
 
 void AThreadTalesCharacter::Input_AbilityInputTagPressed(FGameplayTag InputTag)
 {
+	if (InputTag.MatchesTagExact(ThreadTalesGameplayTags::TAG_Input_Ability_Jump))
+	{
+		Jump();
+	}
+
 	if (AbilitySystemComponent)
 	{
 		AbilitySystemComponent->AbilityInputTagPressed(InputTag);
@@ -183,6 +188,11 @@ void AThreadTalesCharacter::Input_AbilityInputTagPressed(FGameplayTag InputTag)
 
 void AThreadTalesCharacter::Input_AbilityInputTagReleased(FGameplayTag InputTag)
 {
+	if (InputTag.MatchesTagExact(ThreadTalesGameplayTags::TAG_Input_Ability_Jump))
+	{
+		StopJumping();
+	}
+
 	if (AbilitySystemComponent)
 	{
 		AbilitySystemComponent->AbilityInputTagReleased(InputTag);
