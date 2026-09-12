@@ -241,8 +241,36 @@ float UThreadTalesTraversalComponent::GetNominalJumpDistance(EThreadTalesLedgeJu
 	return LedgeHandler.GetNominalJumpDistance(Direction, DistanceType);
 }
 
-UAnimMontage* UThreadTalesTraversalComponent::GetJumpMontage(EThreadTalesLedgeJumpDirection Direction, EThreadTalesLedgeJumpDistanceType DistanceType) const
+UAnimMontage* UThreadTalesTraversalComponent::GetJumpMontage(EThreadTalesLedgeJumpDirection Direction, EThreadTalesLedgeJumpDistanceType DistanceType, bool bFreehang) const
 {
+	if (bFreehang && ClimbingConfig)
+	{
+		if (DistanceType == EThreadTalesLedgeJumpDistanceType::Short)
+		{
+			switch (Direction)
+			{
+			case EThreadTalesLedgeJumpDirection::Up:
+				if (ClimbingConfig->BarClimbHopUpMontage) return ClimbingConfig->BarClimbHopUpMontage.Get();
+				break;
+			case EThreadTalesLedgeJumpDirection::Down:
+				if (ClimbingConfig->BarClimbHopDownMontage) return ClimbingConfig->BarClimbHopDownMontage.Get();
+				break;
+			case EThreadTalesLedgeJumpDirection::Left:
+			case EThreadTalesLedgeJumpDirection::DownLeft:
+			case EThreadTalesLedgeJumpDirection::UpLeft:
+				if (ClimbingConfig->BarClimbJumpLeftMontage) return ClimbingConfig->BarClimbJumpLeftMontage.Get();
+				break;
+			case EThreadTalesLedgeJumpDirection::Right:
+			case EThreadTalesLedgeJumpDirection::DownRight:
+			case EThreadTalesLedgeJumpDirection::UpRight:
+				if (ClimbingConfig->BarClimbJumpRightMontage) return ClimbingConfig->BarClimbJumpRightMontage.Get();
+				break;
+			default:
+				break;
+			}
+		}
+	}
+
 	return LedgeHandler.GetJumpMontage(Direction, DistanceType);
 }
 
@@ -287,19 +315,31 @@ UAnimMontage* UThreadTalesTraversalComponent::GetActiveClimbDownMontage(bool bFr
 	return nullptr;
 }
 
-UAnimMontage* UThreadTalesTraversalComponent::GetActiveBackJumpMontage() const
+UAnimMontage* UThreadTalesTraversalComponent::GetActiveBackJumpMontage(bool bFreehang) const
 {
 	if (ClimbingConfig)
 	{
+		if (bFreehang && ClimbingConfig->BarClimbBackJumpMontage)
+		{
+			return ClimbingConfig->BarClimbBackJumpMontage.Get();
+		}
 		return ClimbingConfig->ClimbBackJumpMontage.Get();
 	}
 	return nullptr;
 }
 
-UAnimMontage* UThreadTalesTraversalComponent::GetActiveShimmyMontage(bool bLeft) const
+UAnimMontage* UThreadTalesTraversalComponent::GetActiveShimmyMontage(bool bLeft, bool bFreehang) const
 {
 	if (ClimbingConfig)
 	{
+		if (bFreehang)
+		{
+			UAnimMontage* BarMontage = bLeft ? ClimbingConfig->BarShimmyLeftMontage.Get() : ClimbingConfig->BarShimmyRightMontage.Get();
+			if (BarMontage)
+			{
+				return BarMontage;
+			}
+		}
 		return bLeft ? ClimbingConfig->ShimmyLeftMontage.Get() : ClimbingConfig->ShimmyRightMontage.Get();
 	}
 	return nullptr;
@@ -482,7 +522,7 @@ void UThreadTalesTraversalComponent::Multicast_HopUp_Implementation(const FVecto
 
 	LedgeHandler.StopAllClimbingMontages(CharacterOwner);
 	SetClimbingSubState(EThreadTalesClimbingSubState::JumpTransition);
-	UAnimMontage* Montage = GetJumpMontage(EThreadTalesLedgeJumpDirection::Up, EThreadTalesLedgeJumpDistanceType::Short);
+	UAnimMontage* Montage = GetJumpMontage(EThreadTalesLedgeJumpDirection::Up, EThreadTalesLedgeJumpDistanceType::Short, bIsFreehang);
 	LedgeHandler.Internal_StartTransition(Montage, TargetLedgeLoc, TargetWallNormal, this, CharacterOwner, -1.0f, EThreadTalesLedgeJumpDistanceType::Short);
 }
 
@@ -501,7 +541,7 @@ void UThreadTalesTraversalComponent::Multicast_SideJump_Implementation(float Dir
 	LedgeHandler.StopAllClimbingMontages(CharacterOwner);
 	SetClimbingSubState(EThreadTalesClimbingSubState::JumpTransition);
 	const EThreadTalesLedgeJumpDirection Dir = (DirectionSign < 0.0f) ? EThreadTalesLedgeJumpDirection::Left : EThreadTalesLedgeJumpDirection::Right;
-	UAnimMontage* Montage = GetJumpMontage(Dir, EThreadTalesLedgeJumpDistanceType::Short);
+	UAnimMontage* Montage = GetJumpMontage(Dir, EThreadTalesLedgeJumpDistanceType::Short, bIsFreehang);
 	LedgeHandler.Internal_StartTransition(Montage, TargetLedgeLoc, TargetWallNormal, this, CharacterOwner, -1.0f, EThreadTalesLedgeJumpDistanceType::Short);
 }
 
@@ -519,9 +559,9 @@ void UThreadTalesTraversalComponent::Multicast_LedgeJump_Implementation(EThreadT
 
 	LedgeHandler.StopAllClimbingMontages(CharacterOwner);
 	SetClimbingSubState(EThreadTalesClimbingSubState::JumpTransition);
-	UAnimMontage* Montage = (Direction == EThreadTalesLedgeJumpDirection::Down && DistanceType == EThreadTalesLedgeJumpDistanceType::Leap && GetActiveBackJumpMontage())
-		? GetActiveBackJumpMontage()
-		: GetJumpMontage(Direction, DistanceType);
+	UAnimMontage* Montage = (Direction == EThreadTalesLedgeJumpDirection::Down && DistanceType == EThreadTalesLedgeJumpDistanceType::Leap && GetActiveBackJumpMontage(bIsFreehang))
+		? GetActiveBackJumpMontage(bIsFreehang)
+		: GetJumpMontage(Direction, DistanceType, bIsFreehang);
 	LedgeHandler.Internal_StartTransition(Montage, TargetLedgeLoc, TargetWallNormal, this, CharacterOwner, -1.0f, DistanceType);
 }
 
@@ -539,7 +579,7 @@ void UThreadTalesTraversalComponent::Multicast_StartShimmy_Implementation(float 
 
 	LedgeHandler.StopAllClimbingMontages(CharacterOwner);
 	SetClimbingSubState(EThreadTalesClimbingSubState::Shimmying);
-	UAnimMontage* Montage = GetActiveShimmyMontage(DirectionSign < 0.0f);
+	UAnimMontage* Montage = GetActiveShimmyMontage(DirectionSign < 0.0f, bIsFreehang);
 	LedgeHandler.Internal_StartTransition(Montage, TargetLedgeLoc, TargetWallNormal, this, CharacterOwner);
 }
 
@@ -689,7 +729,7 @@ void UThreadTalesTraversalComponent::Multicast_StartCornerTransition_Implementat
 	LedgeHandler.StartCornerTransition(DirectionSign, CornerType, CornerPivotLoc, TargetLedgeLoc, TargetWallNormal, this, CharacterOwner);
 }
 
-UAnimMontage* UThreadTalesTraversalComponent::GetActiveCornerMontage(bool bLeft, EThreadTalesCornerType CornerType) const
+UAnimMontage* UThreadTalesTraversalComponent::GetActiveCornerMontage(bool bLeft, EThreadTalesCornerType CornerType, bool bFreehang) const
 {
 	if (!ClimbingConfig)
 	{
@@ -698,19 +738,34 @@ UAnimMontage* UThreadTalesTraversalComponent::GetActiveCornerMontage(bool bLeft,
 
 	UAnimMontage* Montage = nullptr;
 
-	if (CornerType == EThreadTalesCornerType::Outer)
+	if (bFreehang)
 	{
-		Montage = bLeft ? ClimbingConfig->CornerOuterLeftMontage : ClimbingConfig->CornerOuterRightMontage;
-	}
-	else if (CornerType == EThreadTalesCornerType::Inner)
-	{
-		Montage = bLeft ? ClimbingConfig->CornerInnerLeftMontage : ClimbingConfig->CornerInnerRightMontage;
+		if (CornerType == EThreadTalesCornerType::Outer)
+		{
+			Montage = bLeft ? ClimbingConfig->BarCornerOuterLeftMontage.Get() : ClimbingConfig->BarCornerOuterRightMontage.Get();
+		}
+		else if (CornerType == EThreadTalesCornerType::Inner)
+		{
+			Montage = bLeft ? ClimbingConfig->BarCornerInnerLeftMontage.Get() : ClimbingConfig->BarCornerInnerRightMontage.Get();
+		}
 	}
 
-	// Fallback to shimmy montage so functionality is testable before corner animations are authored
 	if (!Montage)
 	{
-		Montage = bLeft ? ClimbingConfig->ShimmyLeftMontage : ClimbingConfig->ShimmyRightMontage;
+		if (CornerType == EThreadTalesCornerType::Outer)
+		{
+			Montage = bLeft ? ClimbingConfig->CornerOuterLeftMontage.Get() : ClimbingConfig->CornerOuterRightMontage.Get();
+		}
+		else if (CornerType == EThreadTalesCornerType::Inner)
+		{
+			Montage = bLeft ? ClimbingConfig->CornerInnerLeftMontage.Get() : ClimbingConfig->CornerInnerRightMontage.Get();
+		}
+	}
+
+	// Fallback to shimmy montage (respecting freehang) so functionality is testable before dedicated corner animations are authored
+	if (!Montage)
+	{
+		Montage = GetActiveShimmyMontage(bLeft, bFreehang);
 	}
 
 	return Montage;

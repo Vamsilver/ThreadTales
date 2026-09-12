@@ -52,6 +52,10 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Montages|Base")
 	TObjectPtr<UAnimMontage> ClimbBackJumpMontage;
 
+	/** Kick-off from wall / leap to opposing ledge montage when freehanging (falls back to ClimbBackJumpMontage) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Montages|Base")
+	TObjectPtr<UAnimMontage> BarClimbBackJumpMontage;
+
 	/** Shimmy step left along continuous ledge */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Montages|Base")
 	TObjectPtr<UAnimMontage> ShimmyLeftMontage;
@@ -59,6 +63,14 @@ public:
 	/** Shimmy step right along continuous ledge */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Montages|Base")
 	TObjectPtr<UAnimMontage> ShimmyRightMontage;
+
+	/** Freehang shimmy step left along continuous bar/pipe (falls back to ShimmyLeftMontage) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Montages|Base")
+	TObjectPtr<UAnimMontage> BarShimmyLeftMontage;
+
+	/** Freehang shimmy step right along continuous bar/pipe (falls back to ShimmyRightMontage) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Montages|Base")
+	TObjectPtr<UAnimMontage> BarShimmyRightMontage;
 
 	// ==========================================
 	// CORNER TRAVERSAL MONTAGES
@@ -84,9 +96,37 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Montages|Corner")
 	TObjectPtr<UAnimMontage> CornerInnerRightMontage;
 
+	/** Freehang root motion montage for wrapping around an outer corner to the left (falls back to CornerOuterLeftMontage). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Montages|Corner")
+	TObjectPtr<UAnimMontage> BarCornerOuterLeftMontage;
+
+	/** Freehang root motion montage for wrapping around an outer corner to the right (falls back to CornerOuterRightMontage). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Montages|Corner")
+	TObjectPtr<UAnimMontage> BarCornerOuterRightMontage;
+
+	/** Freehang root motion montage for sliding into an inner corner to the left (falls back to CornerInnerLeftMontage). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Montages|Corner")
+	TObjectPtr<UAnimMontage> BarCornerInnerLeftMontage;
+
+	/** Freehang root motion montage for sliding into an inner corner to the right (falls back to CornerInnerRightMontage). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Montages|Corner")
+	TObjectPtr<UAnimMontage> BarCornerInnerRightMontage;
+
 	// ==========================================
 	// SHORT DIRECTIONAL JUMP MONTAGES
 	// ==========================================
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Montages|Short")
+	TObjectPtr<UAnimMontage> BarClimbHopUpMontage;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Montages|Short")
+	TObjectPtr<UAnimMontage> BarClimbHopDownMontage;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Montages|Short")
+	TObjectPtr<UAnimMontage> BarClimbJumpLeftMontage;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Montages|Short")
+	TObjectPtr<UAnimMontage> BarClimbJumpRightMontage;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Montages|Short")
 	TObjectPtr<UAnimMontage> ClimbHopUpMontage;

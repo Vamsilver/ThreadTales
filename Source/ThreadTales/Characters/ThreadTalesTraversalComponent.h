@@ -160,10 +160,9 @@ public:
 
 	/** Helper to resolve the best AnimMontage for a given jump direction and distance type */
 	UFUNCTION(BlueprintPure, Category = "ThreadTales|Traversal")
-	UAnimMontage* GetJumpMontage(EThreadTalesLedgeJumpDirection Direction, EThreadTalesLedgeJumpDistanceType DistanceType) const;
+	UAnimMontage* GetJumpMontage(EThreadTalesLedgeJumpDirection Direction, EThreadTalesLedgeJumpDistanceType DistanceType, bool bFreehang = false) const;
 
 	/** Returns the compiled jump configuration (Montage, Min/Max distance, Nominal distance) for given direction & distance */
-	UFUNCTION(BlueprintPure, Category = "ThreadTales|Traversal|MultiLedge")
 	const FThreadTalesLedgeJumpConfig& GetJumpConfig(EThreadTalesLedgeJumpDirection Direction, EThreadTalesLedgeJumpDistanceType DistanceType) const;
 
 	/** Returns min and max jump distance bounds for a given direction and distance type */
@@ -198,15 +197,15 @@ public:
 	UAnimMontage* GetActiveClimbDownMontage(bool bFreehang) const;
 
 	UFUNCTION(BlueprintPure, Category = "ThreadTales|Traversal")
-	UAnimMontage* GetActiveBackJumpMontage() const;
+	UAnimMontage* GetActiveBackJumpMontage(bool bFreehang = false) const;
 
 	UFUNCTION(BlueprintPure, Category = "ThreadTales|Traversal")
-	UAnimMontage* GetActiveShimmyMontage(bool bLeft) const;
+	UAnimMontage* GetActiveShimmyMontage(bool bLeft, bool bFreehang = false) const;
 
 	/** Returns the appropriate corner wrapping montage for the given direction and corner type.
 	 *  Falls back to the shimmy montage if dedicated corner montages are not yet assigned. */
 	UFUNCTION(BlueprintPure, Category = "ThreadTales|Traversal")
-	UAnimMontage* GetActiveCornerMontage(bool bLeft, EThreadTalesCornerType CornerType) const;
+	UAnimMontage* GetActiveCornerMontage(bool bLeft, EThreadTalesCornerType CornerType, bool bFreehang = false) const;
 
 	float GetHangWallOffset() const;
 	float GetHangHeightOffset() const;

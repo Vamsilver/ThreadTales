@@ -484,7 +484,7 @@ void FThreadTalesLedgeClimbingHandler::Internal_StartTransition(UAnimMontage* Mo
 	OwnerComp->SetIsFreehang(bIsFreehang);
 
 	const bool bIsCorner = (ClimbingSubState == EThreadTalesClimbingSubState::CornerTransition);
-	const bool bIsJump = (!bIsCorner && MontageToPlay != OwnerComp->GetActiveShimmyMontage(true) && MontageToPlay != OwnerComp->GetActiveShimmyMontage(false));
+	const bool bIsJump = (!bIsCorner && MontageToPlay != OwnerComp->GetActiveShimmyMontage(true, bIsFreehang) && MontageToPlay != OwnerComp->GetActiveShimmyMontage(false, bIsFreehang));
 	if (!bIsCorner)
 	{
 		OwnerComp->SetClimbingSubState(bIsJump ? EThreadTalesClimbingSubState::JumpTransition : EThreadTalesClimbingSubState::Shimmying);
@@ -500,7 +500,7 @@ void FThreadTalesLedgeClimbingHandler::Internal_StartTransition(UAnimMontage* Mo
 
 	const UThreadTalesClimbingConfig* Config = OwnerComp->ClimbingConfig;
 	float FinalPlayRate = FMath::Max(OwnerComp->GetClimbAnimPlayRateMultiplier(), 0.1f);
-	if (MontageToPlay && Config && MontageToPlay == Config->ClimbBackJumpMontage)
+	if (MontageToPlay && Config && (MontageToPlay == Config->ClimbBackJumpMontage || MontageToPlay == Config->BarClimbBackJumpMontage))
 	{
 		FinalPlayRate = Config->ClimbBackJumpPlayRate;
 	}
@@ -512,20 +512,15 @@ void FThreadTalesLedgeClimbingHandler::Internal_StartTransition(UAnimMontage* Mo
 	float Duration = CustomDuration;
 	if (Duration <= 0.0f)
 	{
-		if (bIsCorner && MontageToPlay)
-		{
-			// Crossfade to Hang montage right as the corner montage begins blending out,
-			// preventing the AnimGraph's underlying locomotion/falling pose from leaking through!
-			const float BlendOutTime = MontageToPlay->BlendOut.GetBlendTime();
-			Duration = FMath::Max(MontageToPlay->GetPlayLength() - BlendOutTime, 0.1f);
-		}
-		else if (bIsJump)
+		if (bIsJump)
 		{
 			switch (DistanceType)
 			{
 			case EThreadTalesLedgeJumpDistanceType::Leap:
 				Duration = Config ? Config->LeapJumpDuration : 1.00f;
-				FinalPlayRate = 1.0f;
+				FinalPlayRate = (MontageToPlay && Config && (MontageToPlay == Config->ClimbBackJumpMontage || MontageToPlay == Config->BarClimbBackJumpMontage))
+					? Config->ClimbBackJumpPlayRate
+					: 1.0f;
 				break;
 			case EThreadTalesLedgeJumpDistanceType::Long:
 				Duration = Config ? Config->LongJumpDuration : 1.00f;
@@ -540,7 +535,10 @@ void FThreadTalesLedgeClimbingHandler::Internal_StartTransition(UAnimMontage* Mo
 		}
 		else if (MontageToPlay)
 		{
-			Duration = MontageToPlay->GetPlayLength();
+			// For Shimmy and Corner: Crossfade to Hang montage right as the active montage begins blending out,
+			// preventing the AnimGraph's underlying locomotion/falling pose from leaking through!
+			const float BlendOutTime = MontageToPlay->BlendOut.GetBlendTime();
+			Duration = FMath::Max(MontageToPlay->GetPlayLength() - BlendOutTime, 0.1f);
 		}
 		else
 		{
@@ -581,7 +579,7 @@ void FThreadTalesLedgeClimbingHandler::HopUp(const FVector& TargetLedgeLoc, cons
 	OwnerComp->SetClimbingSubState(EThreadTalesClimbingSubState::JumpTransition);
 	StopAllClimbingMontages(CharacterOwner);
 
-	UAnimMontage* Montage = GetJumpMontage(EThreadTalesLedgeJumpDirection::Up, EThreadTalesLedgeJumpDistanceType::Short);
+	UAnimMontage* Montage = OwnerComp->GetJumpMontage(EThreadTalesLedgeJumpDirection::Up, EThreadTalesLedgeJumpDistanceType::Short, bIsFreehang);
 	Internal_StartTransition(Montage, TargetLedgeLoc, TargetWallNormal, OwnerComp, CharacterOwner, -1.0f, EThreadTalesLedgeJumpDistanceType::Short);
 
 	if (CharacterOwner && !CharacterOwner->HasAuthority())
@@ -605,7 +603,7 @@ void FThreadTalesLedgeClimbingHandler::SideJump(float DirectionSign, const FVect
 	StopAllClimbingMontages(CharacterOwner);
 
 	const EThreadTalesLedgeJumpDirection Dir = (DirectionSign < 0.0f) ? EThreadTalesLedgeJumpDirection::Left : EThreadTalesLedgeJumpDirection::Right;
-	UAnimMontage* Montage = GetJumpMontage(Dir, EThreadTalesLedgeJumpDistanceType::Short);
+	UAnimMontage* Montage = OwnerComp->GetJumpMontage(Dir, EThreadTalesLedgeJumpDistanceType::Short, bIsFreehang);
 	Internal_StartTransition(Montage, TargetLedgeLoc, TargetWallNormal, OwnerComp, CharacterOwner, -1.0f, EThreadTalesLedgeJumpDistanceType::Short);
 
 	if (CharacterOwner && !CharacterOwner->HasAuthority())
@@ -628,7 +626,7 @@ void FThreadTalesLedgeClimbingHandler::PerformLedgeJump(EThreadTalesLedgeJumpDir
 	OwnerComp->SetClimbingSubState(EThreadTalesClimbingSubState::JumpTransition);
 	StopAllClimbingMontages(CharacterOwner);
 
-	UAnimMontage* Montage = GetJumpMontage(Direction, DistanceType);
+	UAnimMontage* Montage = OwnerComp->GetJumpMontage(Direction, DistanceType, bIsFreehang);
 	Internal_StartTransition(Montage, TargetLedgeLoc, TargetWallNormal, OwnerComp, CharacterOwner, -1.0f, DistanceType);
 
 	if (CharacterOwner && !CharacterOwner->HasAuthority())
@@ -651,7 +649,7 @@ void FThreadTalesLedgeClimbingHandler::StartShimmy(float DirectionSign, const FV
 	OwnerComp->SetClimbingSubState(EThreadTalesClimbingSubState::Shimmying);
 	StopAllClimbingMontages(CharacterOwner);
 
-	UAnimMontage* Montage = OwnerComp->GetActiveShimmyMontage(DirectionSign < 0.0f);
+	UAnimMontage* Montage = OwnerComp->GetActiveShimmyMontage(DirectionSign < 0.0f, bIsFreehang);
 	Internal_StartTransition(Montage, TargetLedgeLoc, TargetWallNormal, OwnerComp, CharacterOwner);
 
 	if (CharacterOwner && !CharacterOwner->HasAuthority())
@@ -825,10 +823,10 @@ void FThreadTalesLedgeClimbingHandler::PerformBackJump(UThreadTalesTraversalComp
 		UE_LOG(LogThreadTales, Log, TEXT("[Climbing] PerformBackJump: Jumping to opposing ledge at %s (Normal: %s)"),
 			*BestOpposingLedgeLoc.ToString(), *BestOpposingWallNormal.ToString());
 
-		UAnimMontage* LeapMont = OwnerComp->GetActiveBackJumpMontage();
+		UAnimMontage* LeapMont = OwnerComp->GetActiveBackJumpMontage(bIsFreehang);
 		if (!LeapMont)
 		{
-			LeapMont = GetJumpMontage(EThreadTalesLedgeJumpDirection::Down, EThreadTalesLedgeJumpDistanceType::Leap);
+			LeapMont = OwnerComp->GetJumpMontage(EThreadTalesLedgeJumpDirection::Down, EThreadTalesLedgeJumpDistanceType::Leap, bIsFreehang);
 		}
 
 		OwnerComp->SetClimbingSubState(EThreadTalesClimbingSubState::JumpTransition);
@@ -1087,34 +1085,12 @@ UAnimMontage* FThreadTalesLedgeClimbingHandler::GetJumpMontage(EThreadTalesLedge
 
 UAnimMontage* FThreadTalesLedgeClimbingHandler::GetCornerMontage(float DirectionSign, EThreadTalesCornerType CornerType, UThreadTalesTraversalComponent* OwnerComp) const
 {
-	if (!OwnerComp || !OwnerComp->ClimbingConfig)
+	if (!OwnerComp)
 	{
 		return nullptr;
 	}
 
-	const UThreadTalesClimbingConfig* Config = OwnerComp->ClimbingConfig;
-	const bool bLeft = (DirectionSign < 0.0f);
-
-	UAnimMontage* Montage = nullptr;
-
-	if (CornerType == EThreadTalesCornerType::Outer)
-	{
-		Montage = bLeft ? Config->CornerOuterLeftMontage : Config->CornerOuterRightMontage;
-	}
-	else if (CornerType == EThreadTalesCornerType::Inner)
-	{
-		Montage = bLeft ? Config->CornerInnerLeftMontage : Config->CornerInnerRightMontage;
-	}
-
-	// Fallback: if dedicated corner montage is nullptr, use shimmy montage so the
-	// gameplay logic is fully testable before corner animations are authored.
-	if (!Montage)
-	{
-		Montage = bLeft ? Config->ShimmyLeftMontage : Config->ShimmyRightMontage;
-		UE_LOG(LogThreadTales, Verbose, TEXT("[Traversal] GetCornerMontage: Corner montage nullptr — falling back to Shimmy montage."));
-	}
-
-	return Montage;
+	return OwnerComp->GetActiveCornerMontage(DirectionSign < 0.0f, CornerType, bIsFreehang);
 }
 
 void FThreadTalesLedgeClimbingHandler::StartCornerTransition(
