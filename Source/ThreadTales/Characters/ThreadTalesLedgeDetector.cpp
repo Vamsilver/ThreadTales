@@ -1486,3 +1486,236 @@ bool FThreadTalesLedgeDetector::FindOpposingLedge(
 	}
 	return false;
 }
+
+bool FThreadTalesLedgeDetector::ProbeCornerLedge(
+	const ACharacter* Character,
+	const UThreadTalesClimbingConfig* Config,
+	bool bDrawDebugTraces,
+	const FVector& CurrentLedgeLoc,
+	const FVector& CurrentWallNormal,
+	float DirectionSign,
+	EThreadTalesCornerType& OutCornerType,
+	FVector& OutCornerPivotLoc,
+	FVector& OutLedgeLoc,
+	FVector& OutWallNormal)
+{
+	OutCornerType = EThreadTalesCornerType::None;
+	OutCornerPivotLoc = FVector::ZeroVector;
+
+	if (!Character)
+	{
+		return false;
+	}
+
+	UWorld* World = Character->GetWorld();
+	if (!World)
+	{
+		return false;
+	}
+
+	// ---- Config resolution ----
+	const float ProbeDistance    = Config ? Config->CornerProbeDistance    : 80.0f;
+	const float InwardProbeDepth = Config ? Config->CornerInwardProbeDepth : 30.0f;
+	const float MaxAngleDeg      = Config ? Config->CornerMaxAngleDegrees  : 120.0f;
+
+	FCollisionQueryParams QueryParams;
+	QueryParams.AddIgnoredActor(Character);
+	QueryParams.bTraceComplex = false;
+
+	// Flatten wall normal to 2D
+	const FVector WallNormal2D = FVector(CurrentWallNormal.X, CurrentWallNormal.Y, 0.0f).GetSafeNormal();
+	const FVector Up = FVector::UpVector;
+
+	// Use ActorRightVector * Sign to match FindSideLedge orientation exactly!
+	// +1 = right, -1 = left relative to the hanging character
+	const float Sign = (DirectionSign < 0.0f) ? -1.0f : 1.0f;
+	const FVector SideDir = Character->GetActorRightVector() * Sign;
+
+	// Lower ray by 15cm below the ledge top so traces hit solid vertical wall faces,
+	// rather than grazing or skimming over the top edge in empty air.
+	const float WallFaceZ = CurrentLedgeLoc.Z - 15.0f;
+
+	// ================================================================
+	// 1. TEST FOR INNER CORNER (Concave): Obstacle / Wall directly in front along SideDir
+	// ================================================================
+	// Start trace 10cm in front of Wall 1 in open air so it never grazes or gets blocked by Wall 1!
+	const FVector InnerTraceStart = FVector(
+		CurrentLedgeLoc.X + WallNormal2D.X * 10.0f,
+		CurrentLedgeLoc.Y + WallNormal2D.Y * 10.0f,
+		WallFaceZ
+	);
+	const FVector InnerTraceEnd = InnerTraceStart + SideDir * (ProbeDistance + 35.0f);
+
+	if (bDrawDebugTraces)
+	{
+		DrawDebugLine(World, InnerTraceStart, InnerTraceEnd, FColor::Cyan, false, 2.0f, 0, 1.5f);
+	}
+
+	FHitResult InnerHit;
+	if (World->LineTraceSingleByChannel(InnerHit, InnerTraceStart, InnerTraceEnd, ECC_Visibility, QueryParams) && InnerHit.bBlockingHit)
+	{
+		const FVector HitNormal2D = FVector(InnerHit.ImpactNormal.X, InnerHit.ImpactNormal.Y, 0.0f).GetSafeNormal();
+
+		// The blocking wall normal must point roughly opposite to SideDir (facing the character)
+		const float OpposeDot = FVector::DotProduct(HitNormal2D, -SideDir);
+		if (OpposeDot >= 0.4f)
+		{
+			const float AngleBetweenNormals = FMath::RadiansToDegrees(FMath::Acos(
+				FMath::Clamp(FVector::DotProduct(WallNormal2D, HitNormal2D), -1.0f, 1.0f)));
+			const float CornerAngle = 180.0f - AngleBetweenNormals;
+
+			if (CornerAngle <= MaxAngleDeg)
+			{
+				// Corner vertex is where Wall 1 and Wall 2 meet (trace was 10cm in front of Wall 1):
+				const FVector PivotPoint = FVector(
+					InnerHit.ImpactPoint.X - WallNormal2D.X * 10.0f,
+					InnerHit.ImpactPoint.Y - WallNormal2D.Y * 10.0f,
+					CurrentLedgeLoc.Z
+				);
+
+				// Step along the inner wall face away from the corner seam (into the room).
+				// Distances must be >= 35cm so the body clearance sphere (radius 32cm) clears Wall 1!
+				const TArray<float> InnerStepDistances = { 50.0f, 45.0f, 40.0f, 35.0f };
+				for (float StepDist : InnerStepDistances)
+				{
+					const FVector InnerLedgeCenter = PivotPoint + WallNormal2D * StepDist;
+					const FVector TopTraceStart = InnerLedgeCenter - HitNormal2D * 10.0f + Up * 30.0f;
+					const FVector TopTraceEnd   = TopTraceStart - Up * 60.0f;
+
+					FHitResult TopHit;
+					if (World->LineTraceSingleByChannel(TopHit, TopTraceStart, TopTraceEnd, ECC_Visibility, QueryParams) && TopHit.bBlockingHit && TopHit.ImpactNormal.Z >= 0.6f)
+					{
+						const FVector WallTraceStart = InnerLedgeCenter + HitNormal2D * 30.0f - Up * 10.0f;
+						const FVector WallTraceEnd   = InnerLedgeCenter - HitNormal2D * 10.0f - Up * 10.0f;
+
+						FHitResult WallHit;
+						if (World->LineTraceSingleByChannel(WallHit, WallTraceStart, WallTraceEnd, ECC_Visibility, QueryParams) && WallHit.bBlockingHit)
+						{
+							const FVector CandidateLoc = FVector(WallHit.ImpactPoint.X, WallHit.ImpactPoint.Y, TopHit.ImpactPoint.Z);
+							if (ValidateLedgeLipAndClearance(Character, Config, bDrawDebugTraces, CandidateLoc, HitNormal2D))
+							{
+								OutCornerType = EThreadTalesCornerType::Inner;
+								OutCornerPivotLoc = PivotPoint;
+								OutLedgeLoc = CandidateLoc;
+								OutWallNormal = HitNormal2D;
+
+								if (bDrawDebugTraces)
+								{
+									DrawDebugSphere(World, OutCornerPivotLoc, 8.0f, 8, FColor::Cyan, false, 3.0f);
+									DrawDebugString(World, OutCornerPivotLoc + FVector(0, 0, 15), TEXT("INNER PIVOT"), nullptr, FColor::Cyan, 3.0f, true);
+									DrawDebugSphere(World, OutLedgeLoc, 12.0f, 12, FColor::Green, false, 4.0f);
+									DrawDebugDirectionalArrow(World, OutLedgeLoc, OutLedgeLoc + OutWallNormal * 40.0f, 15.0f, FColor::Green, false, 4.0f);
+									DrawDebugString(World, OutLedgeLoc + FVector(0, 0, 20), TEXT("INNER CORNER OK"), nullptr, FColor::Green, 4.0f, true);
+								}
+								UE_LOG(LogThreadTalesLedgeDetector, Log, TEXT("[Climbing] ProbeCornerLedge: SUCCESS! Inner corner at %s → new ledge %s (normal=%s)"),
+									*OutCornerPivotLoc.ToString(), *OutLedgeLoc.ToString(), *OutWallNormal.ToString());
+								return true;
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// ================================================================
+	// 2. TEST FOR OUTER CORNER (Convex): Current wall ends and turns around the corner
+	// ================================================================
+	// Support beams and walls of various thicknesses (from 10cm thin beams to thick blocks)
+	// by testing multiple inward depths into the wall geometry.
+	const TArray<float> TestDepths = { 10.0f, 20.0f, 35.0f, 50.0f };
+
+	for (float Depth : TestDepths)
+	{
+		const FVector SideFaceProbeStart = FVector(
+			CurrentLedgeLoc.X + SideDir.X * (ProbeDistance + 15.0f) - WallNormal2D.X * Depth,
+			CurrentLedgeLoc.Y + SideDir.Y * (ProbeDistance + 15.0f) - WallNormal2D.Y * Depth,
+			WallFaceZ
+		);
+		const FVector SideFaceProbeEnd = FVector(
+			CurrentLedgeLoc.X - WallNormal2D.X * Depth,
+			CurrentLedgeLoc.Y - WallNormal2D.Y * Depth,
+			WallFaceZ
+		);
+
+		if (bDrawDebugTraces)
+		{
+			DrawDebugLine(World, SideFaceProbeStart, SideFaceProbeEnd, FColor::Orange, false, 2.0f, 0, 1.2f);
+		}
+
+		FHitResult SideWallHit;
+		if (World->LineTraceSingleByChannel(SideWallHit, SideFaceProbeStart, SideFaceProbeEnd, ECC_Visibility, QueryParams) && SideWallHit.bBlockingHit)
+		{
+			const FVector SideWallNormal2D = FVector(SideWallHit.ImpactNormal.X, SideWallHit.ImpactNormal.Y, 0.0f).GetSafeNormal();
+
+			// The side wall normal must point roughly in SideDir (out of the side face)
+			const float SideDot = FVector::DotProduct(SideWallNormal2D, SideDir);
+			if (SideDot >= 0.4f)
+			{
+				// Verify angle between front wall normal and side wall normal (~90 degrees)
+				const float AngleBetweenNormals = FMath::RadiansToDegrees(FMath::Acos(
+					FMath::Clamp(FVector::DotProduct(WallNormal2D, SideWallNormal2D), -1.0f, 1.0f)));
+
+				if (AngleBetweenNormals <= MaxAngleDeg)
+				{
+					// Corner vertex is the intersection of front wall and side wall planes:
+					const FVector PivotPoint = FVector(
+						SideWallHit.ImpactPoint.X + WallNormal2D.X * Depth,
+						SideWallHit.ImpactPoint.Y + WallNormal2D.Y * Depth,
+						CurrentLedgeLoc.Z
+					);
+
+					// Search along the side wall ledge for a comfortable landing point.
+					// Outer corner animation has a natural reach of ~57cm; test from 50cm down to 20cm
+					// to support both long walls and shorter beams/blocks.
+					const TArray<float> DesiredStepDistances = { 50.0f, 40.0f, 30.0f, 20.0f };
+					for (float StepDist : DesiredStepDistances)
+					{
+						const FVector SideLedgeCenter = PivotPoint - WallNormal2D * StepDist;
+						const FVector TopTraceStart = SideLedgeCenter - SideWallNormal2D * 10.0f + Up * 30.0f;
+						const FVector TopTraceEnd   = TopTraceStart - Up * 60.0f;
+
+						FHitResult TopHit;
+						if (World->LineTraceSingleByChannel(TopHit, TopTraceStart, TopTraceEnd, ECC_Visibility, QueryParams) && TopHit.bBlockingHit && TopHit.ImpactNormal.Z >= 0.6f)
+						{
+							// Pinpoint the side wall vertical face at this step distance
+							const FVector WallTraceStart = SideLedgeCenter + SideWallNormal2D * 30.0f - Up * 10.0f;
+							const FVector WallTraceEnd   = SideLedgeCenter - SideWallNormal2D * 10.0f - Up * 10.0f;
+
+							FHitResult WallHit;
+							if (World->LineTraceSingleByChannel(WallHit, WallTraceStart, WallTraceEnd, ECC_Visibility, QueryParams) && WallHit.bBlockingHit)
+							{
+								const FVector CandidateLoc = FVector(WallHit.ImpactPoint.X, WallHit.ImpactPoint.Y, TopHit.ImpactPoint.Z);
+
+								// Validate lip and clearance (same standard check as FindSideLedge)
+								if (ValidateLedgeLipAndClearance(Character, Config, bDrawDebugTraces, CandidateLoc, SideWallNormal2D))
+								{
+									OutCornerType = EThreadTalesCornerType::Outer;
+									OutCornerPivotLoc = PivotPoint;
+									OutLedgeLoc = CandidateLoc;
+									OutWallNormal = SideWallNormal2D;
+
+									if (bDrawDebugTraces)
+									{
+										DrawDebugSphere(World, OutCornerPivotLoc, 8.0f, 8, FColor::Orange, false, 3.0f);
+										DrawDebugString(World, OutCornerPivotLoc + FVector(0, 0, 15), TEXT("OUTER PIVOT"), nullptr, FColor::Orange, 3.0f, true);
+										DrawDebugSphere(World, OutLedgeLoc, 12.0f, 12, FColor::Green, false, 4.0f);
+										DrawDebugDirectionalArrow(World, OutLedgeLoc, OutLedgeLoc + OutWallNormal * 40.0f, 15.0f, FColor::Green, false, 4.0f);
+										DrawDebugString(World, OutLedgeLoc + FVector(0, 0, 20), TEXT("OUTER CORNER OK"), nullptr, FColor::Green, 4.0f, true);
+									}
+
+									UE_LOG(LogThreadTalesLedgeDetector, Log, TEXT("[Climbing] ProbeCornerLedge: SUCCESS! Outer corner at %s → new ledge %s (normal=%s)"),
+										*OutCornerPivotLoc.ToString(), *OutLedgeLoc.ToString(), *OutWallNormal.ToString());
+
+									return true;
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return false;
+}

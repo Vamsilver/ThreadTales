@@ -61,6 +61,30 @@ public:
 	TObjectPtr<UAnimMontage> ShimmyRightMontage;
 
 	// ==========================================
+	// CORNER TRAVERSAL MONTAGES
+	// ==========================================
+
+	/** Root motion montage for wrapping around an outer (convex) corner to the left.
+	 *  Falls back to ShimmyLeftMontage if nullptr. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Montages|Corner")
+	TObjectPtr<UAnimMontage> CornerOuterLeftMontage;
+
+	/** Root motion montage for wrapping around an outer (convex) corner to the right.
+	 *  Falls back to ShimmyRightMontage if nullptr. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Montages|Corner")
+	TObjectPtr<UAnimMontage> CornerOuterRightMontage;
+
+	/** Root motion montage for sliding into an inner (concave) corner to the left.
+	 *  Falls back to ShimmyLeftMontage if nullptr. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Montages|Corner")
+	TObjectPtr<UAnimMontage> CornerInnerLeftMontage;
+
+	/** Root motion montage for sliding into an inner (concave) corner to the right.
+	 *  Falls back to ShimmyRightMontage if nullptr. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Montages|Corner")
+	TObjectPtr<UAnimMontage> CornerInnerRightMontage;
+
+	// ==========================================
 	// SHORT DIRECTIONAL JUMP MONTAGES
 	// ==========================================
 
@@ -582,4 +606,24 @@ public:
 	/** Vertical upward offset for downward trace in Diagonal Down jumps */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Sensing|MultiLedge")
 	float DiagonalDownJumpTopTraceOffset;
+
+	// ==========================================
+	// CORNER TRAVERSAL SENSING
+	// ==========================================
+
+	/** Maximum angle (degrees) between current and target wall normals to accept as a wrappable corner.
+	 *  90 = strict right-angle only. 120 = allows slightly obtuse corners (chamfers). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Sensing|Corner",
+		meta = (ClampMin = "60.0", ClampMax = "170.0"))
+	float CornerMaxAngleDegrees;
+
+	/** Distance along wall tangent to shoot the corner pivot detection ray (cm).
+	 *  Should be at least HangWallOffset + capsule radius so the ray clears the geometry. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Sensing|Corner")
+	float CornerProbeDistance;
+
+	/** How far past the detected corner pivot point to probe for the new ledge face (cm).
+	 *  Governs how deeply into the new wall face we search for the adjacent ledge surface. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Sensing|Corner")
+	float CornerInwardProbeDepth;
 };

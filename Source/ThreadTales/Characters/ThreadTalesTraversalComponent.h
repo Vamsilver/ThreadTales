@@ -199,6 +199,11 @@ public:
 	UFUNCTION(BlueprintPure, Category = "ThreadTales|Traversal")
 	UAnimMontage* GetActiveShimmyMontage(bool bLeft) const;
 
+	/** Returns the appropriate corner wrapping montage for the given direction and corner type.
+	 *  Falls back to the shimmy montage if dedicated corner montages are not yet assigned. */
+	UFUNCTION(BlueprintPure, Category = "ThreadTales|Traversal")
+	UAnimMontage* GetActiveCornerMontage(bool bLeft, EThreadTalesCornerType CornerType) const;
+
 	float GetHangWallOffset() const;
 	float GetHangHeightOffset() const;
 	float GetClimbAnimPlayRateMultiplier() const;
@@ -265,6 +270,14 @@ public:
 
 	UFUNCTION(NetMulticast, Reliable)
 	void Multicast_WallEject();
+
+	UFUNCTION(Server, Reliable)
+	void Server_StartCornerTransition(float DirectionSign, EThreadTalesCornerType CornerType,
+		const FVector& CornerPivotLoc, const FVector& TargetLedgeLoc, const FVector& TargetWallNormal);
+
+	UFUNCTION(NetMulticast, Reliable)
+	void Multicast_StartCornerTransition(float DirectionSign, EThreadTalesCornerType CornerType,
+		const FVector& CornerPivotLoc, const FVector& TargetLedgeLoc, const FVector& TargetWallNormal);
 
 	// Montage End / BlendOut Callbacks
 	UFUNCTION()

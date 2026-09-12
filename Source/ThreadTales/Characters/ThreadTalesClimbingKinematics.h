@@ -66,4 +66,37 @@ public:
 		FVector& OutStartLoc,
 		FRotator& OutStartRot
 	);
+
+	/**
+	 * Calculates capsule transform for 90-degree corner transition around a wall/beam.
+	 * Decouples the horizontal XY curved arc (which bows outward around the corner vertex)
+	 * from vertical Z height, and synchronizes the active turning motion with the montage's
+	 * active phase (~0.55s), keeping the capsule planted at target for settling.
+	 *
+	 * @param NormalizedTime   Overall transition progress [0..1]
+	 * @param CornerType       Outer (convex) or Inner (concave) corner
+	 * @param HangWallOffset   Horizontal wall offset for capsule hang
+	 * @param HangHeightOffset Vertical hang offset below ledge
+	 * @param StartLoc         Hang location on the starting ledge
+	 * @param CornerPivotLoc   World position of the corner vertex at ledge height
+	 * @param TargetLoc        Target hang location on the new ledge
+	 * @param StartRot         Character rotation at start (facing old wall)
+	 * @param TargetRot        Character rotation at target (facing new wall)
+	 * @param OutLoc           Interpolated world location
+	 * @param OutRot           Interpolated world rotation
+	 */
+	static void CalculateCornerTransitionTransform(
+		float NormalizedTime,
+		float TransitionDuration,
+		EThreadTalesCornerType CornerType,
+		float HangWallOffset,
+		float HangHeightOffset,
+		const FVector& StartLoc,
+		const FVector& CornerPivotLoc,
+		const FVector& TargetLoc,
+		const FRotator& StartRot,
+		const FRotator& TargetRot,
+		FVector& OutLoc,
+		FRotator& OutRot
+	);
 };

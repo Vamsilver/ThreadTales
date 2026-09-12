@@ -54,12 +54,26 @@ enum class EThreadTalesLedgeJumpDistanceType : uint8
 UENUM(BlueprintType)
 enum class EThreadTalesClimbingSubState : uint8
 {
-	None            UMETA(DisplayName = "None"),
-	IdleHang        UMETA(DisplayName = "Idle Hang"),
-	Shimmying       UMETA(DisplayName = "Shimmying"),
-	JumpTransition  UMETA(DisplayName = "Jump Transition"),
-	MantleUp        UMETA(DisplayName = "Mantle Up"),
-	ClimbDown       UMETA(DisplayName = "Climb Down")
+	None             UMETA(DisplayName = "None"),
+	IdleHang         UMETA(DisplayName = "Idle Hang"),
+	Shimmying        UMETA(DisplayName = "Shimmying"),
+	JumpTransition   UMETA(DisplayName = "Jump Transition"),
+	MantleUp         UMETA(DisplayName = "Mantle Up"),
+	ClimbDown        UMETA(DisplayName = "Climb Down"),
+	CornerTransition UMETA(DisplayName = "Corner Transition"),
+};
+
+/**
+ * Type of wall corner being traversed during Corner Wrapping.
+ * Outer = convex corner (wall protrudes outward, ledge wraps around a pillar/block edge).
+ * Inner = concave corner (ledge enters a recess or alcove).
+ */
+UENUM(BlueprintType)
+enum class EThreadTalesCornerType : uint8
+{
+	None  UMETA(DisplayName = "None"),
+	Outer UMETA(DisplayName = "Outer Corner"),
+	Inner UMETA(DisplayName = "Inner Corner"),
 };
 
 /**

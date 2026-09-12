@@ -136,4 +136,12 @@ UThreadTalesClimbingConfig::UThreadTalesClimbingConfig()
 	LateralJumpTopTraceOffset = 28.0f;
 	DiagonalUpJumpTopTraceOffset = 50.0f;
 	DiagonalDownJumpTopTraceOffset = 25.0f;
+
+	// Sensing & Corner Traversal
+	// CornerMaxAngleDegrees: 120° allows tight 90° corners + slight chamfers with tolerance
+	CornerMaxAngleDegrees = 120.0f;
+	// CornerProbeDistance: 80cm along tangent — enough to exit the current wall geometry
+	CornerProbeDistance = 80.0f;
+	// CornerInwardProbeDepth: 30cm past the pivot to reliably sample the new wall face
+	CornerInwardProbeDepth = 30.0f;
 }

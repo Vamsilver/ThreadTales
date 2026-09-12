@@ -17,6 +17,8 @@
 FThreadTalesLedgeClimbingHandler::FThreadTalesLedgeClimbingHandler()
 	: ClimbingSubState(EThreadTalesClimbingSubState::None)
 	, bIsFreehang(false)
+	, bSavedUseControllerDesiredRotation(true)
+	, bSavedOrientRotationToMovement(false)
 	, CachedLedgeLocation(FVector::ZeroVector)
 	, CachedWallNormal(FVector::ZeroVector)
 	, CachedHangLocation(FVector::ZeroVector)
@@ -30,11 +32,11 @@ FThreadTalesLedgeClimbingHandler::FThreadTalesLedgeClimbingHandler()
 	, TransitionDistanceType(EThreadTalesLedgeJumpDistanceType::Short)
 	, TransitionTimer(0.0f)
 	, TransitionDuration(0.8f)
+	, CornerTransitionPivotLocation(FVector::ZeroVector)
+	, ActiveCornerType(EThreadTalesCornerType::None)
 	, RegrabCooldownTimer(0.0f)
 	, ClimbingInputDebounceTimer(0.0f)
 	, ShimmyCooldownTimer(0.0f)
-	, bSavedUseControllerDesiredRotation(true)
-	, bSavedOrientRotationToMovement(false)
 {
 }
 
@@ -72,32 +74,62 @@ void FThreadTalesLedgeClimbingHandler::Tick(float DeltaTime, UThreadTalesTravers
 		return;
 	}
 
-	// 1. If currently transitioning between ledges (Hop Up, Side Jump, Shimmy), interpolate character
+	// 1. If currently transitioning between ledges (Hop Up, Side Jump, Shimmy, CornerTransition), interpolate character
 	if (OwnerComp->GetTraversalState() == EThreadTalesTraversalState::LedgeClimbing && IsTransitioning())
 	{
+		// Enforce CMC suppression for ALL transition types (including CornerTransition)
+		if (UCharacterMovementComponent* MoveComp = CharacterOwner->GetCharacterMovement())
+		{
+			MoveComp->bUseControllerDesiredRotation = false;
+			MoveComp->bOrientRotationToMovement = false;
+		}
+
 		TransitionTimer += DeltaTime;
 		const float NormalizedTime = FMath::Clamp(TransitionTimer / FMath::Max(TransitionDuration, 0.01f), 0.0f, 1.0f);
 
 		FVector NewLoc;
 		FRotator NewRot;
-		FThreadTalesClimbingKinematics::CalculateTransitionTransform(
-			NormalizedTime,
-			ClimbingSubState == EThreadTalesClimbingSubState::JumpTransition,
-			TransitionDistanceType,
-			OwnerComp->ClimbingConfig,
-			TransitionStartLocation,
-			TransitionTargetLocation,
-			TransitionStartRotation,
-			TransitionTargetRotation,
-			NewLoc,
-			NewRot
-		);
+
+		if (ClimbingSubState == EThreadTalesClimbingSubState::CornerTransition)
+		{
+			// Two-segment curved arc: Start → CornerApex → Target (safely rounds corner without cutting geometry)
+			FThreadTalesClimbingKinematics::CalculateCornerTransitionTransform(
+				NormalizedTime,
+				TransitionDuration,
+				ActiveCornerType,
+				OwnerComp->GetHangWallOffset(),
+				OwnerComp->GetHangHeightOffset(),
+				TransitionStartLocation,
+				CornerTransitionPivotLocation,
+				TransitionTargetLocation,
+				TransitionStartRotation,
+				TransitionTargetRotation,
+				NewLoc,
+				NewRot
+			);
+		}
+		else
+		{
+			FThreadTalesClimbingKinematics::CalculateTransitionTransform(
+				NormalizedTime,
+				ClimbingSubState == EThreadTalesClimbingSubState::JumpTransition,
+				TransitionDistanceType,
+				OwnerComp->ClimbingConfig,
+				TransitionStartLocation,
+				TransitionTargetLocation,
+				TransitionStartRotation,
+				TransitionTargetRotation,
+				NewLoc,
+				NewRot
+			);
+		}
 
 		CharacterOwner->SetActorLocationAndRotation(NewLoc, NewRot, false, nullptr, ETeleportType::TeleportPhysics);
 
 		if (NormalizedTime >= 1.0f)
 		{
 			ClimbingSubState = EThreadTalesClimbingSubState::IdleHang;
+			ActiveCornerType = EThreadTalesCornerType::None;
 			CachedLedgeLocation = PendingTargetLedgeLocation;
 			CachedWallNormal = PendingTargetWallNormal;
 			CachedHangLocation = TransitionTargetLocation;
@@ -233,19 +265,24 @@ void FThreadTalesLedgeClimbingHandler::ProcessInput(const APlayerController* PC,
 	{
 		const float SideSign = (JumpDir == EThreadTalesLedgeJumpDirection::Right) ? 1.0f : -1.0f;
 
-		for (EThreadTalesLedgeJumpDistanceType DistType : Priorities)
+		// 1. Directional jump across gaps (if sprint is held)
+		if (bIsSprint)
 		{
-			FVector TargetLedgeLoc;
-			FVector TargetWallNormal;
-			if (FThreadTalesLedgeDetector::FindLedgeInDirection(CharacterOwner, OwnerComp->ClimbingConfig, OwnerComp->bDrawDebugTraces, CachedLedgeLocation, CachedWallNormal, JumpDir, DistType, JumpConfigTable, TargetLedgeLoc, TargetWallNormal))
+			for (EThreadTalesLedgeJumpDistanceType DistType : Priorities)
 			{
-				ClimbingInputDebounceTimer = OwnerComp->GetJumpInputDebounceDuration();
-				PerformLedgeJump(JumpDir, DistType, TargetLedgeLoc, TargetWallNormal, OwnerComp, CharacterOwner);
-				return;
+				FVector TargetLedgeLoc;
+				FVector TargetWallNormal;
+				if (FThreadTalesLedgeDetector::FindLedgeInDirection(CharacterOwner, OwnerComp->ClimbingConfig, OwnerComp->bDrawDebugTraces, CachedLedgeLocation, CachedWallNormal, JumpDir, DistType, JumpConfigTable, TargetLedgeLoc, TargetWallNormal))
+				{
+					ClimbingInputDebounceTimer = OwnerComp->GetJumpInputDebounceDuration();
+					PerformLedgeJump(JumpDir, DistType, TargetLedgeLoc, TargetWallNormal, OwnerComp, CharacterOwner);
+					return;
+				}
 			}
 		}
 
-		if (bIsSprint && ShimmyCooldownTimer <= 0.0f)
+		// 2. Regular continuous shimmy along the ledge (holding A or D)
+		if (ShimmyCooldownTimer <= 0.0f)
 		{
 			FVector SideLedgeLoc;
 			FVector SideWallNormal;
@@ -257,6 +294,25 @@ void FThreadTalesLedgeClimbingHandler::ProcessInput(const APlayerController* PC,
 				return;
 			}
 		}
+
+		// 3. Corner Wrapping fallback when the continuous ledge ends at a wall corner
+		if (ShimmyCooldownTimer <= 0.0f)
+		{
+			EThreadTalesCornerType CornerType = EThreadTalesCornerType::None;
+			FVector CornerPivotLoc;
+			FVector CornerLedgeLoc;
+			FVector CornerWallNormal;
+			if (FThreadTalesLedgeDetector::ProbeCornerLedge(
+					CharacterOwner, OwnerComp->ClimbingConfig, OwnerComp->bDrawDebugTraces,
+					CachedLedgeLocation, CachedWallNormal,
+					SideSign, CornerType, CornerPivotLoc, CornerLedgeLoc, CornerWallNormal))
+			{
+				ClimbingInputDebounceTimer = OwnerComp->GetShimmyInputDebounceDuration();
+				StartCornerTransition(SideSign, CornerType, CornerPivotLoc, CornerLedgeLoc, CornerWallNormal, OwnerComp, CharacterOwner);
+				return;
+			}
+		}
+
 		return;
 	}
 
@@ -414,8 +470,12 @@ void FThreadTalesLedgeClimbingHandler::Internal_StartTransition(UAnimMontage* Mo
 	bIsFreehang = FThreadTalesLedgeDetector::CheckIsFreehangLedge(CharacterOwner, OwnerComp->ClimbingConfig, OwnerComp->bDrawDebugTraces, TargetLedgeLoc, TargetWallNormal);
 	OwnerComp->SetIsFreehang(bIsFreehang);
 
-	const bool bIsJump = (MontageToPlay != OwnerComp->GetActiveShimmyMontage(true) && MontageToPlay != OwnerComp->GetActiveShimmyMontage(false));
-	ClimbingSubState = bIsJump ? EThreadTalesClimbingSubState::JumpTransition : EThreadTalesClimbingSubState::Shimmying;
+	const bool bIsCorner = (ClimbingSubState == EThreadTalesClimbingSubState::CornerTransition);
+	const bool bIsJump = (!bIsCorner && MontageToPlay != OwnerComp->GetActiveShimmyMontage(true) && MontageToPlay != OwnerComp->GetActiveShimmyMontage(false));
+	if (!bIsCorner)
+	{
+		ClimbingSubState = bIsJump ? EThreadTalesClimbingSubState::JumpTransition : EThreadTalesClimbingSubState::Shimmying;
+	}
 	TransitionDistanceType = DistanceType;
 	TransitionTimer = 0.0f;
 
@@ -431,11 +491,22 @@ void FThreadTalesLedgeClimbingHandler::Internal_StartTransition(UAnimMontage* Mo
 	{
 		FinalPlayRate = Config->ClimbBackJumpPlayRate;
 	}
+	else if (bIsCorner)
+	{
+		FinalPlayRate = 1.0f;
+	}
 
 	float Duration = CustomDuration;
 	if (Duration <= 0.0f)
 	{
-		if (bIsJump)
+		if (bIsCorner && MontageToPlay)
+		{
+			// Crossfade to Hang montage right as the corner montage begins blending out,
+			// preventing the AnimGraph's underlying locomotion/falling pose from leaking through!
+			const float BlendOutTime = MontageToPlay->BlendOut.GetBlendTime();
+			Duration = FMath::Max(MontageToPlay->GetPlayLength() - BlendOutTime, 0.1f);
+		}
+		else if (bIsJump)
 		{
 			switch (DistanceType)
 			{
@@ -983,4 +1054,93 @@ float FThreadTalesLedgeClimbingHandler::GetNominalJumpDistance(EThreadTalesLedge
 UAnimMontage* FThreadTalesLedgeClimbingHandler::GetJumpMontage(EThreadTalesLedgeJumpDirection Direction, EThreadTalesLedgeJumpDistanceType DistanceType) const
 {
 	return JumpConfigTable.GetJumpMontage(Direction, DistanceType);
+}
+
+UAnimMontage* FThreadTalesLedgeClimbingHandler::GetCornerMontage(float DirectionSign, EThreadTalesCornerType CornerType, UThreadTalesTraversalComponent* OwnerComp) const
+{
+	if (!OwnerComp || !OwnerComp->ClimbingConfig)
+	{
+		return nullptr;
+	}
+
+	const UThreadTalesClimbingConfig* Config = OwnerComp->ClimbingConfig;
+	const bool bLeft = (DirectionSign < 0.0f);
+
+	UAnimMontage* Montage = nullptr;
+
+	if (CornerType == EThreadTalesCornerType::Outer)
+	{
+		Montage = bLeft ? Config->CornerOuterLeftMontage : Config->CornerOuterRightMontage;
+	}
+	else if (CornerType == EThreadTalesCornerType::Inner)
+	{
+		Montage = bLeft ? Config->CornerInnerLeftMontage : Config->CornerInnerRightMontage;
+	}
+
+	// Fallback: if dedicated corner montage is nullptr, use shimmy montage so the
+	// gameplay logic is fully testable before corner animations are authored.
+	if (!Montage)
+	{
+		Montage = bLeft ? Config->ShimmyLeftMontage : Config->ShimmyRightMontage;
+		UE_LOG(LogThreadTales, Verbose, TEXT("[Traversal] GetCornerMontage: Corner montage nullptr — falling back to Shimmy montage."));
+	}
+
+	return Montage;
+}
+
+void FThreadTalesLedgeClimbingHandler::StartCornerTransition(
+	float DirectionSign,
+	EThreadTalesCornerType CornerType,
+	const FVector& CornerPivotLoc,
+	const FVector& TargetLedgeLoc,
+	const FVector& TargetWallNormal,
+	UThreadTalesTraversalComponent* OwnerComp,
+	AThreadTalesCharacter* CharacterOwner)
+{
+	if (!OwnerComp || !CharacterOwner)
+	{
+		return;
+	}
+
+	// Guard: only allowed from IdleHang, not mid-transition
+	if (OwnerComp->GetTraversalState() != EThreadTalesTraversalState::LedgeClimbing || IsTransitioning())
+	{
+		return;
+	}
+
+	// Cache corner data before entering transition
+	CornerTransitionPivotLocation = CornerPivotLoc;
+	ActiveCornerType              = CornerType;
+	ClimbingSubState              = EThreadTalesClimbingSubState::CornerTransition;
+
+	StopAllClimbingMontages(CharacterOwner);
+
+	// Select montage (dedicated Corner montage, or fallback to Shimmy montage)
+	UAnimMontage* CornerMontage = GetCornerMontage(DirectionSign, CornerType, OwnerComp);
+
+	// Corner transition uses the same duration as a Shimmy step (ShortJump duration)
+	// Internal_StartTransition with CustomDuration=-1 uses ShimmyCooldownDuration internally via DistanceType::Short
+	Internal_StartTransition(
+		CornerMontage,
+		TargetLedgeLoc,
+		TargetWallNormal,
+		OwnerComp,
+		CharacterOwner,
+		-1.0f,
+		EThreadTalesLedgeJumpDistanceType::Short
+	);
+
+	UE_LOG(LogThreadTales, Log, TEXT("[Traversal] StartCornerTransition: %s corner, DirectionSign=%.0f, Pivot=%s, Target=%s"),
+		CornerType == EThreadTalesCornerType::Outer ? TEXT("Outer") : TEXT("Inner"),
+		DirectionSign, *CornerPivotLoc.ToString(), *TargetLedgeLoc.ToString());
+
+	// Network: local client sends to server, server multicasts to all
+	if (!CharacterOwner->HasAuthority())
+	{
+		OwnerComp->Server_StartCornerTransition(DirectionSign, CornerType, CornerPivotLoc, TargetLedgeLoc, TargetWallNormal);
+	}
+	else
+	{
+		OwnerComp->Multicast_StartCornerTransition(DirectionSign, CornerType, CornerPivotLoc, TargetLedgeLoc, TargetWallNormal);
+	}
 }

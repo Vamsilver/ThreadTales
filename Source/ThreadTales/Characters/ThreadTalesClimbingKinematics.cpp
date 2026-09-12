@@ -296,3 +296,74 @@ void FThreadTalesClimbingKinematics::CalculateClimbDownPreAlignment(
 		HangLoc.Z + RootMotionDown
 	);
 }
+
+void FThreadTalesClimbingKinematics::CalculateCornerTransitionTransform(
+	float NormalizedTime,
+	float TransitionDuration,
+	EThreadTalesCornerType CornerType,
+	float HangWallOffset,
+	float HangHeightOffset,
+	const FVector& StartLoc,
+	const FVector& CornerPivotLoc,
+	const FVector& TargetLoc,
+	const FRotator& StartRot,
+	const FRotator& TargetRot,
+	FVector& OutLoc,
+	FRotator& OutRot)
+{
+	const float T = FMath::Clamp(NormalizedTime, 0.0f, 1.0f);
+
+	// The active turning motion in the corner montage completes at ~0.55s.
+	// We dynamically calculate ActiveTurnFraction based on TransitionDuration so the capsule
+	// reliably finishes turning and arrives at TargetLoc at exactly 0.55s, regardless of montage length!
+	const float ActiveTurnFraction = FMath::Clamp(0.55f / FMath::Max(TransitionDuration, 0.01f), 0.1f, 1.0f);
+
+	if (T >= ActiveTurnFraction)
+	{
+		// Active turn complete: character is firmly on the new ledge, playing settle/re-grip
+		OutLoc = TargetLoc;
+		OutRot = TargetRot;
+		return;
+	}
+
+	const float TurnT = T / ActiveTurnFraction;
+
+	// Rotations point into walls, so wall normals point away from walls (outward):
+	const FVector WallNormal1 = (-StartRot.Vector()).GetSafeNormal2D();
+	const FVector WallNormal2 = (-TargetRot.Vector()).GetSafeNormal2D();
+
+	// Calculate corner apex for the capsule center:
+	// In both outer (convex) and inner (concave) 90-degree corners, offsetting from CornerPivotLoc
+	// by (WallNormal1 + WallNormal2) * HangWallOffset places the apex at exactly
+	// HangWallOffset clearance from BOTH walls simultaneously, smoothly curving around the corner
+	// rather than penetrating the solid wall geometry!
+	const FVector CornerApex = FVector(
+		CornerPivotLoc.X + (WallNormal1.X + WallNormal2.X) * HangWallOffset,
+		CornerPivotLoc.Y + (WallNormal1.Y + WallNormal2.Y) * HangWallOffset,
+		FMath::Lerp(StartLoc.Z, TargetLoc.Z, 0.5f)
+	);
+
+	FVector HorizontalLoc;
+	if (TurnT <= 0.5f)
+	{
+		// Segment 1: StartLoc → CornerApex
+		const float SegT = FMath::SmoothStep(0.0f, 1.0f, TurnT / 0.5f);
+		HorizontalLoc = FMath::Lerp(StartLoc, CornerApex, SegT);
+	}
+	else
+	{
+		// Segment 2: CornerApex → TargetLoc
+		const float SegT = FMath::SmoothStep(0.0f, 1.0f, (TurnT - 0.5f) / 0.5f);
+		HorizontalLoc = FMath::Lerp(CornerApex, TargetLoc, SegT);
+	}
+
+	const float BlendedZ = FMath::Lerp(StartLoc.Z, TargetLoc.Z, TurnT);
+	OutLoc = FVector(HorizontalLoc.X, HorizontalLoc.Y, BlendedZ);
+
+	// Smooth rotation Slerp across the active turn phase
+	const float RotT = FMath::SmoothStep(0.0f, 1.0f, TurnT);
+	const FQuat StartQuat  = FQuat(StartRot);
+	const FQuat TargetQuat = FQuat(TargetRot);
+	OutRot = FQuat::Slerp(StartQuat, TargetQuat, RotT).Rotator();
+}
+

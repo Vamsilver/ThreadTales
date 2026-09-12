@@ -638,3 +638,56 @@ void UThreadTalesTraversalComponent::Multicast_WallEject_Implementation()
 	SetTraversalState(EThreadTalesTraversalState::None);
 	LedgeHandler.SetRegrabCooldownTimer(GetWallEjectRegrabCooldown());
 }
+
+void UThreadTalesTraversalComponent::Server_StartCornerTransition_Implementation(
+	float DirectionSign,
+	EThreadTalesCornerType CornerType,
+	const FVector& CornerPivotLoc,
+	const FVector& TargetLedgeLoc,
+	const FVector& TargetWallNormal)
+{
+	Multicast_StartCornerTransition(DirectionSign, CornerType, CornerPivotLoc, TargetLedgeLoc, TargetWallNormal);
+}
+
+void UThreadTalesTraversalComponent::Multicast_StartCornerTransition_Implementation(
+	float DirectionSign,
+	EThreadTalesCornerType CornerType,
+	const FVector& CornerPivotLoc,
+	const FVector& TargetLedgeLoc,
+	const FVector& TargetWallNormal)
+{
+	// Skip on the local client who initiated the transition — they already executed it
+	if (!CharacterOwner || CharacterOwner->IsLocallyControlled())
+	{
+		return;
+	}
+
+	LedgeHandler.StartCornerTransition(DirectionSign, CornerType, CornerPivotLoc, TargetLedgeLoc, TargetWallNormal, this, CharacterOwner);
+}
+
+UAnimMontage* UThreadTalesTraversalComponent::GetActiveCornerMontage(bool bLeft, EThreadTalesCornerType CornerType) const
+{
+	if (!ClimbingConfig)
+	{
+		return nullptr;
+	}
+
+	UAnimMontage* Montage = nullptr;
+
+	if (CornerType == EThreadTalesCornerType::Outer)
+	{
+		Montage = bLeft ? ClimbingConfig->CornerOuterLeftMontage : ClimbingConfig->CornerOuterRightMontage;
+	}
+	else if (CornerType == EThreadTalesCornerType::Inner)
+	{
+		Montage = bLeft ? ClimbingConfig->CornerInnerLeftMontage : ClimbingConfig->CornerInnerRightMontage;
+	}
+
+	// Fallback to shimmy montage so functionality is testable before corner animations are authored
+	if (!Montage)
+	{
+		Montage = bLeft ? ClimbingConfig->ShimmyLeftMontage : ClimbingConfig->ShimmyRightMontage;
+	}
+
+	return Montage;
+}

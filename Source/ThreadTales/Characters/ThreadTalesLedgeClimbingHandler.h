@@ -53,11 +53,30 @@ public:
 	void WallEject(UThreadTalesTraversalComponent* OwnerComp, AThreadTalesCharacter* CharacterOwner);
 	void PerformLedgeJump(EThreadTalesLedgeJumpDirection Direction, EThreadTalesLedgeJumpDistanceType DistanceType, const FVector& TargetLedgeLoc, const FVector& TargetWallNormal, UThreadTalesTraversalComponent* OwnerComp, AThreadTalesCharacter* CharacterOwner);
 
+	/**
+	 * Initiates a Corner Wrapping transition (outer or inner wall corner).
+	 * Called when FindSideLedge returns false but ProbeCornerLedge succeeds.
+	 * Sets SubState = CornerTransition, caches pivot, launches Internal_StartTransition,
+	 * plays corner montage (falls back to shimmy montage if nullptr), and fires RPC.
+	 */
+	void StartCornerTransition(
+		float DirectionSign,
+		EThreadTalesCornerType CornerType,
+		const FVector& CornerPivotLoc,
+		const FVector& TargetLedgeLoc,
+		const FVector& TargetWallNormal,
+		UThreadTalesTraversalComponent* OwnerComp,
+		AThreadTalesCharacter* CharacterOwner);
+
 	// --- Transition & Montages ---
 	void Internal_StartTransition(UAnimMontage* MontageToPlay, const FVector& TargetLedgeLoc, const FVector& TargetWallNormal, UThreadTalesTraversalComponent* OwnerComp, AThreadTalesCharacter* CharacterOwner, float CustomDuration = -1.0f, EThreadTalesLedgeJumpDistanceType DistanceType = EThreadTalesLedgeJumpDistanceType::Short);
 	void CrossfadeToHangMontage(UThreadTalesTraversalComponent* OwnerComp, AThreadTalesCharacter* CharacterOwner);
 	void StopAllClimbingMontages(AThreadTalesCharacter* CharacterOwner);
 	void SetClimbDownCollision(bool bEnable, AThreadTalesCharacter* CharacterOwner);
+
+	/** Returns the appropriate corner montage for the given direction and corner type.
+	 *  Falls back to ShimmyLeft/RightMontage if the dedicated corner montage is nullptr. */
+	UAnimMontage* GetCornerMontage(float DirectionSign, EThreadTalesCornerType CornerType, UThreadTalesTraversalComponent* OwnerComp) const;
 
 	// --- Montage Callbacks ---
 	void OnClimbMontageEnded(UAnimMontage* Montage, bool bInterrupted, UThreadTalesTraversalComponent* OwnerComp, AThreadTalesCharacter* CharacterOwner);
@@ -69,7 +88,12 @@ public:
 	EThreadTalesClimbingSubState GetClimbingSubState() const { return ClimbingSubState; }
 	void SetClimbingSubState(EThreadTalesClimbingSubState NewSubState) { ClimbingSubState = NewSubState; }
 	bool IsHanging() const { return ClimbingSubState == EThreadTalesClimbingSubState::IdleHang; }
-	bool IsTransitioning() const { return ClimbingSubState == EThreadTalesClimbingSubState::JumpTransition || ClimbingSubState == EThreadTalesClimbingSubState::Shimmying; }
+	bool IsTransitioning() const
+	{
+		return ClimbingSubState == EThreadTalesClimbingSubState::JumpTransition
+			|| ClimbingSubState == EThreadTalesClimbingSubState::Shimmying
+			|| ClimbingSubState == EThreadTalesClimbingSubState::CornerTransition;
+	}
 	bool IsFreehang() const { return bIsFreehang; }
 	void SetIsFreehang(bool bInFreehang) { bIsFreehang = bInFreehang; }
 
@@ -117,6 +141,10 @@ private:
 	EThreadTalesLedgeJumpDistanceType TransitionDistanceType;
 	float TransitionTimer;
 	float TransitionDuration;
+
+	// Corner Wrapping transition state
+	FVector CornerTransitionPivotLocation;   // World position of the corner pivot for two-segment arc
+	EThreadTalesCornerType ActiveCornerType; // Type of the corner currently being traversed
 
 	// Cooldown & debounce timers
 	float RegrabCooldownTimer;

@@ -163,4 +163,36 @@ public:
 		FVector& OutLedgeLoc,
 		FVector& OutWallNormal
 	);
+
+	/**
+	 * Probes around a wall corner (outer or inner) when FindSideLedge finds no continuous ledge.
+	 *
+	 * Algorithm (3 phases):
+	 *   Phase 1 — Corner pivot detection: line trace along wall tangent (DirectionSign * CornerProbeDistance).
+	 *             No hit  → Outer corner, pivot = trace end point.
+	 *             Wall hit → Inner corner, pivot = impact point, new normal = opposite of hit normal.
+	 *   Phase 2 — Swing past pivot: for Outer rotate tangent 90° around Up and advance CornerInwardProbeDepth.
+	 *                               for Inner retreat along new normal by CornerInwardProbeDepth.
+	 *   Phase 3 — New ledge validation via ProbeLedgeTopSurface + ValidateLedgeLipAndClearance +
+	 *             ValidateLedgeHandsPlacement on the new face.
+	 *
+	 * @param DirectionSign      +1.0 = right, -1.0 = left
+	 * @param OutCornerType      Detected corner type (Outer / Inner)
+	 * @param OutCornerPivotLoc  World position of the corner pivot point (for two-segment kinematics)
+	 * @param OutLedgeLoc        World position of the new ledge edge on the far side of the corner
+	 * @param OutWallNormal      Outward normal of the new ledge's wall face
+	 * @return true if a valid, body-clearance-verified ledge was found around the corner
+	 */
+	static bool ProbeCornerLedge(
+		const ACharacter* Character,
+		const UThreadTalesClimbingConfig* Config,
+		bool bDrawDebugTraces,
+		const FVector& CurrentLedgeLoc,
+		const FVector& CurrentWallNormal,
+		float DirectionSign,
+		EThreadTalesCornerType& OutCornerType,
+		FVector& OutCornerPivotLoc,
+		FVector& OutLedgeLoc,
+		FVector& OutWallNormal
+	);
 };
