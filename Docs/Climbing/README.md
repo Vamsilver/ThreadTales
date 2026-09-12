@@ -10,6 +10,7 @@
 |---|---|
 | **Координатор режимов** | `UThreadTalesTraversalComponent` (`Source/ThreadTales/Characters/ThreadTalesTraversalComponent.h`) |
 | **Обработчик лазания** | `FThreadTalesLedgeClimbingHandler` (`Source/ThreadTales/Characters/ThreadTalesLedgeClimbingHandler.h`) |
+| **Камера перемещения** | `FThreadTalesClimbingCameraHandler` (`Source/ThreadTales/Characters/ThreadTalesClimbingCameraHandler.h`) |
 | **Пространственный детектор** | `FThreadTalesLedgeDetector` (`Source/ThreadTales/Characters/ThreadTalesLedgeDetector.h`) |
 | **Кинематика и прыжки** | `FThreadTalesClimbingKinematics`, `FThreadTalesJumpConfigTable` |
 | **Обработка ввода** | `FThreadTalesTraversalInputHelper` |
@@ -86,9 +87,10 @@
 
 ## 4. Сетевая синхронизация (Replication & RPCs)
 
-1. `CurrentTraversalState` реплицируется через `DOREPLIFETIME` + `OnRep_TraversalState`.
+1. `CurrentTraversalState` и `CurrentClimbingSubState` (`IdleHang`, `Shimmying`, `CornerTransition`, `JumpTransition`, `MantleUp`, `ClimbDown`) реплицируются через `DOREPLIFETIME` + RepNotify (`OnRep_TraversalState`, `OnRep_ClimbingSubState`) и делегаты.
 2. Клиент отправляет Server RPC: `Server_StartLedgeClimb`, `Server_LedgeJump`, `Server_StartShimmy`, `Server_ClimbUp`, `Server_ClimbDown`, `Server_WallEject`, `Server_ReleaseLedge`, `Server_StartCornerTransition`.
-3. Сервер транслирует Multicast RPC для воспроизведения на всех клиентах.
+3. Сервер транслирует Multicast RPC для воспроизведения анимаций и перемещений на всех клиентах.
+4. **Синхронная камера (Camera Follow):** Во время активной фазы разворота `CornerTransition` (0..0.55с) выделенный модуль `FThreadTalesClimbingCameraHandler` синхронно в реальном времени вращает `ControlRotation.Yaw` локального контроллера в такт кинематике тела и Root Motion. Относительный угол обзора игрока к стене сохраняется. При любом активном движении мыши игроком автосопровождение мгновенно уступает приоритет ручному управлению.
 
 ---
 
