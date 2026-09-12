@@ -94,7 +94,33 @@
 
 ---
 
-## 5. Дочерние разделы
+## 5. Анимационная матрица: Braced vs Freehang (С упором в стену vs Свободный вис)
+
+Система поддерживает раздельные наборы анимаций для виса с опорой ногами в стену (`bIsFreehang = false`) и виса на руках без опоры (`bIsFreehang = true` — на балках, перекладинах или тонких выступах):
+
+| Действие | Braced свойство (`UThreadTalesClimbingConfig`) | Freehang свойство (`UThreadTalesClimbingConfig`) |
+|---|---|---|
+| **Idle Hang** | `HangMontage` | `BarHangMontage` |
+| **Climb Up (Mantle)** | `ClimbOnTopMontage` | `BarClimbOnTopMontage` |
+| **Climb Down** | `ClimbDownMontage` | `BarClimbDownMontage` |
+| **Shimmy L / R** | `ShimmyLeftMontage` / `ShimmyRightMontage` | `BarShimmyLeftMontage` / `BarShimmyRightMontage` |
+| **Corner Outer L / R** | `CornerOuterLeftMontage` / `CornerOuterRightMontage` | `BarCornerOuterLeftMontage` / `BarCornerOuterRightMontage` |
+| **Corner Inner L / R** | `CornerInnerLeftMontage` / `CornerInnerRightMontage` | `BarCornerInnerLeftMontage` / `BarCornerInnerRightMontage` |
+| **Back Jump / Opposing Leap** | `ClimbBackJumpMontage` | `BarClimbBackJumpMontage` |
+| **Hop Up / Hop Down** | `JumpConfigTable` (Short Up/Down) | `BarClimbHopUpMontage` / `BarClimbHopDownMontage` |
+| **Jump Left / Jump Right** | `JumpConfigTable` (Short Left/Right) | `BarClimbJumpLeftMontage` / `BarClimbJumpRightMontage` |
+
+### Иерархический Fallback (Безопасность конфигурации)
+Если для какого-либо действия Freehang-монтаж не назначен (`nullptr`) в Data Asset:
+1. `GetActiveBackJumpMontage(bFreehang)` возвращает `ClimbBackJumpMontage`.
+2. `GetActiveShimmyMontage(bLeft, bFreehang)` возвращает `ShimmyLeftMontage` / `ShimmyRightMontage`.
+3. `GetActiveCornerMontage(bLeft, CornerType, bFreehang)` сначала проверяет Freehang Corner, затем Braced Corner, и в итоге откатывается на `GetActiveShimmyMontage(bLeft, bFreehang)`.
+4. `GetJumpMontage(Direction, DistanceType, bFreehang)` для `Short` дистанций берет Freehang прыжок/подскок; если он не задан — берет монтаж из `FThreadTalesJumpConfigTable`.
+Это гарантирует отсутствие сбоев и зависаний даже при частичной настройке ассетов в Data Asset.
+
+---
+
+## 6. Дочерние разделы
 
 * [Spatial Detection Pipeline](file:///Y:/UnrealProjects/ThreadTales/Docs/Climbing/Detection.md) — Алгоритмы сканирования, 6 фаз детекта, ClimbDown, BackJump, ProbeCornerLedge.
 * [Kinematics & Jump Tables](file:///Y:/UnrealProjects/ThreadTales/Docs/Climbing/Kinematics.md) — Таблица прыжков 8 направлений, формулы скоростей и IK, двухсегментная дуга Corner.
