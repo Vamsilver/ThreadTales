@@ -2,7 +2,8 @@
 
 > **Статус документа:** Официальный архитектурный стандарт проекта ThreadTales.  
 > **Расположение:** Корень проекта на ПК (`y:\UnrealProjects\ThreadTales\CLIMBING_SYSTEM.md`).  
-> **Назначение:** Полная фиксация всех математических, физических, анимационных и сетевых правил скалолазания для разработчика и AI-агентов.
+> **Назначение:** Полная фиксация всех математических, физических, анимационных и сетевых правил скалолазания для разработчика и AI-агентов.  
+> **Модульные версии для быстрого чтения:** См. специализированный каталог [Docs/Climbing/](file:///Y:/UnrealProjects/ThreadTales/Docs/Climbing/README.md) ([Detection.md](file:///Y:/UnrealProjects/ThreadTales/Docs/Climbing/Detection.md), [Kinematics.md](file:///Y:/UnrealProjects/ThreadTales/Docs/Climbing/Kinematics.md), [Traps_And_Fixes.md](file:///Y:/UnrealProjects/ThreadTales/Docs/Climbing/Traps_And_Fixes.md)).
 
 ---
 
@@ -497,25 +498,40 @@ struct FThreadTalesLedgeJumpConfig
    - При наличии назначенного `ClimbingConfig` данные берутся напрямую из Data Asset.
    - Если `ClimbingConfig == nullptr`, система прозрачно обращается к внутренним переменным компонента (`UPROPERTY()`), гарантируя 100% стабильность работы.
 
-### 14.4 Модульная C++ архитектура Traversal системы (Разделение монолита)
-Для исключения проблемы «God Component» код разделен на 3 специализированных подсистемы:
+### 14.4 Модульная C++ архитектура Traversal системы (Паттерн Mode Handlers)
+Для полного исключения проблемы «God Component» и подготовки к добавлению лестниц и канатов без разрастания кода, система разделена на 5 специализированных подсистем:
 
 1. **`ThreadTalesTraversalTypes.h`:**
    - Изолированный заголовок типов, перечислений (`EThreadTalesTraversalState`, `EThreadTalesClimbingSubState`, `EThreadTalesLedgeJumpDirection`, `EThreadTalesLedgeJumpDistanceType`) и структуры `FThreadTalesLedgeJumpConfig`.
 
-2. **`FThreadTalesLedgeDetector` (`ThreadTalesLedgeDetector.h / .cpp`):**
+2. **`FThreadTalesTraversalInputHelper` (`ThreadTalesTraversalInputHelper.h / .cpp`):**
+   - Математический классификатор 8 направлений прыжков по углам вектора (`VectorToJumpDirection`) с фильтром мертвых зон (`DeadZone = 0.25`).
+   - Извлечение 2D вектора перемещения с поддержкой как аналоговых стиков геймпада, так и клавиш клавиатуры (`GetMovementInputVector`).
+   - Определение зажатого спринта (`IsSprintHeld`).
+
+3. **`FThreadTalesLedgeDetector` (`ThreadTalesLedgeDetector.h / .cpp`):**
    - Выделенный модуль пространственного зондирования и физических коллизий мира.
    - Содержит всю низкоуровневую логику: `DetectLedge`, `TraceForwardWall`, `ProbeLedgeTopSurface`, `ValidateLedgeLipAndClearance`, `ValidateLedgeHandsPlacement`, `CheckIsFreehangLedge`, `FindUpperLedge`, `FindSideLedge`, `FindLedgeInDirection`, `FindEdgeForClimbDown`, `CanClimbUp`.
    - Полностью отвязан от сетевой репликации и GAS.
 
-3. **`FThreadTalesClimbingKinematics` & `FThreadTalesJumpConfigTable` (`ThreadTalesClimbingKinematics.h / .cpp`):**
+4. **`FThreadTalesClimbingKinematics` & `FThreadTalesJumpConfigTable` (`ThreadTalesClimbingKinematics.h / .cpp`):**
    - Выделенный модуль кинематики переходов и прыжковых таблиц.
    - Содержит компиляцию fallback-цепочек прыжков `[9][3]`, расчет параболических траекторий и сглаживания смещений (`CalculateTransitionTransform`), расчет импульса отскока от стены (`CalculateWallEjectVelocity`) и начального позиционирования спуска (`CalculateClimbDownPreAlignment`).
 
-4. **`UThreadTalesTraversalComponent` (`ThreadTalesTraversalComponent.h / .cpp`):**
-   - Сокращен с 3430 до ~730 строк.
-   - Является чистым координатором состояний, сетевых RPC (Server/Multicast), обработки ввода (Input) и GAS-тегов.
-   - Предоставляет стабильный фасад для Blueprint API без ломки существующих ссылок.
+5. **`FThreadTalesLedgeClimbingHandler` (`ThreadTalesLedgeClimbingHandler.h / .cpp`):**
+   - Выделенный обработчик режима лазания по уступам.
+   - Инкапсулирует анкоры виса, интерполяцию переходов, дебаунс-таймеры, обработку ввода, запуск монтажей и коллбэки завершения анимаций.
+    - **Инварианты делегатов спуска и подъема:**
+      * `OnClimbDownMontageBlendingOut`: обязан немедленно восстанавливать коллизию (`SetClimbDownCollision(false)`), сразу же фиксировать персонажа в точке виса (`SetActorLocationAndRotation(CachedHangLocation, CachedHangRotation)`), переводить субстейт в `IdleHang`, подавлять разворот (`bUseControllerDesiredRotation = false; bOrientRotationToMovement = false;`) и запускать `CrossfadeToHangMontage()`. Это исключает паразитный поворот капсулы боком и устраняет провисание веса слота DefaultSlot.
+      * `OnClimbDownMontageEnded`: БЕЗУСЛОВНО (независимо от `bInterrupted`) подтверждает фиксацию `CachedHangLocation/Rotation`, переводит стейт в `IdleHang`, устанавливает `MOVE_Flying + Velocity=Zero` (НИКОГДА не `DisableMovement()` — ломает Root Motion и вызывает бой с `CBP_SandboxCharacter`).
+      * **Подавление разворота в `Tick`:** пока активно состояние `ClimbDown` или `IdleHang`, в `Tick` каждый кадр принудительно поддерживаются `bOrientRotationToMovement = false` и `bUseControllerDesiredRotation = false`, нейтрализуя принудительный разворот из `CBP_SandboxCharacter::UpdateRotation_PreCMC`. Восстановление флагов разрешено ТОЛЬКО при выходе из лазания (`ReleaseLedge`, `PerformBackJump`, `OnClimbUpMontageEnded`).
+      * `OnClimbMontageBlendingOut` (Mantle): обязан выполнять трейс вниз от Root Motion позиции капсулы и выравнивать высоту ног по полу с переключением в `MOVE_Walking`.
+      * `OnClimbMontageEnded` (Mantle): сбрасывает `MantleUp -> None`, восстанавливает флаги вращения и запускает `RegrabCooldownTimer`.
+
+6. **`UThreadTalesTraversalComponent` (`ThreadTalesTraversalComponent.h / .cpp`):**
+   - Сокращен с 3430 до **~240 строк в .h и ~450 строк в .cpp**.
+   - Является чистым диспетчером режимов (None, LedgeClimbing, Ladder, Rope), фасадом для Blueprint API и координатором сетевых RPC (Server/Multicast) и GAS-тегов.
+   - При переключении в `Ladder` или `Rope` управление просто делегируется в соответствующий обработчик (`LadderHandler` / `RopeHandler`), не затрагивая код уступов.
 
 ---
 
