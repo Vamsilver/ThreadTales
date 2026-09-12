@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Characters/ThreadTalesTraversalTypes.h"
 #include "Characters/ThreadTalesClimbingKinematics.h"
+#include "Characters/ThreadTalesClimbingCameraHandler.h"
 
 class AThreadTalesCharacter;
 class UThreadTalesTraversalComponent;
@@ -145,6 +146,9 @@ private:
 	// Corner Wrapping transition state
 	FVector CornerTransitionPivotLocation;   // World position of the corner pivot for two-segment arc
 	EThreadTalesCornerType ActiveCornerType; // Type of the corner currently being traversed
+
+	// Dedicated climbing camera alignment handler
+	FThreadTalesClimbingCameraHandler CameraHandler;
 
 	// Cooldown & debounce timers
 	float RegrabCooldownTimer;

@@ -626,4 +626,17 @@ public:
 	 *  Governs how deeply into the new wall face we search for the adjacent ledge surface. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Sensing|Corner")
 	float CornerInwardProbeDepth;
+
+	// ==========================================
+	// CAMERA TUNING
+	// ==========================================
+
+	/** Whether the camera control rotation should smoothly turn to face the new wall after a corner transition */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Tuning|Camera")
+	bool bEnableCornerCameraTurn;
+
+	/** Interpolation speed for smooth camera rotation follow after rounding a corner */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Tuning|Camera",
+		meta = (ClampMin = "1.0", ClampMax = "20.0", EditCondition = "bEnableCornerCameraTurn"))
+	float CornerCameraTurnInterpSpeed;
 };

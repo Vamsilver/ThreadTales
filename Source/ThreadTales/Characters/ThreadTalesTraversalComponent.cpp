@@ -22,6 +22,7 @@ UThreadTalesTraversalComponent::UThreadTalesTraversalComponent()
 	SetIsReplicatedByDefault(true);
 
 	CurrentTraversalState = EThreadTalesTraversalState::None;
+	CurrentClimbingSubState = EThreadTalesClimbingSubState::None;
 	bIsFreehang = false;
 	bDrawDebugTraces = false;
 }
@@ -31,6 +32,7 @@ void UThreadTalesTraversalComponent::GetLifetimeReplicatedProps(TArray<FLifetime
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
 	DOREPLIFETIME(UThreadTalesTraversalComponent, CurrentTraversalState);
+	DOREPLIFETIME(UThreadTalesTraversalComponent, CurrentClimbingSubState);
 	DOREPLIFETIME(UThreadTalesTraversalComponent, bIsFreehang);
 }
 
@@ -338,7 +340,7 @@ void UThreadTalesTraversalComponent::SetTraversalState(EThreadTalesTraversalStat
 			else if (OldState == EThreadTalesTraversalState::LedgeClimbing)
 			{
 				ASC->RemoveLooseGameplayTag(ThreadTalesGameplayTags::TAG_State_Movement_Climbing);
-				LedgeHandler.SetClimbingSubState(EThreadTalesClimbingSubState::None);
+				SetClimbingSubState(EThreadTalesClimbingSubState::None);
 			}
 		}
 	}
@@ -346,9 +348,30 @@ void UThreadTalesTraversalComponent::SetTraversalState(EThreadTalesTraversalStat
 	OnTraversalStateChanged.Broadcast(NewState, OldState);
 }
 
+void UThreadTalesTraversalComponent::SetClimbingSubState(EThreadTalesClimbingSubState NewSubState)
+{
+	LedgeHandler.SetClimbingSubState(NewSubState);
+
+	if (CurrentClimbingSubState == NewSubState)
+	{
+		return;
+	}
+
+	const EThreadTalesClimbingSubState OldSubState = CurrentClimbingSubState;
+	CurrentClimbingSubState = NewSubState;
+
+	OnClimbingSubStateChanged.Broadcast(NewSubState, OldSubState);
+}
+
 void UThreadTalesTraversalComponent::OnRep_TraversalState(EThreadTalesTraversalState OldState)
 {
 	OnTraversalStateChanged.Broadcast(CurrentTraversalState, OldState);
+}
+
+void UThreadTalesTraversalComponent::OnRep_ClimbingSubState(EThreadTalesClimbingSubState OldSubState)
+{
+	LedgeHandler.SetClimbingSubState(CurrentClimbingSubState);
+	OnClimbingSubStateChanged.Broadcast(CurrentClimbingSubState, OldSubState);
 }
 
 // ==========================================
@@ -393,7 +416,7 @@ void UThreadTalesTraversalComponent::Multicast_StartLedgeClimb_Implementation(co
 
 	bIsFreehang = CheckIsFreehangLedge(LedgeLocation, WallNormal);
 	LedgeHandler.SetIsFreehang(bIsFreehang);
-	LedgeHandler.SetClimbingSubState(EThreadTalesClimbingSubState::IdleHang);
+	SetClimbingSubState(EThreadTalesClimbingSubState::IdleHang);
 	LedgeHandler.SetCachedLedgeLocation(LedgeLocation);
 	LedgeHandler.SetCachedWallNormal(WallNormal);
 
@@ -432,7 +455,7 @@ void UThreadTalesTraversalComponent::Multicast_ReleaseLedge_Implementation()
 	{
 		LedgeHandler.SetClimbDownCollision(false, CharacterOwner);
 	}
-	LedgeHandler.SetClimbingSubState(EThreadTalesClimbingSubState::None);
+	SetClimbingSubState(EThreadTalesClimbingSubState::None);
 	bIsFreehang = false;
 	LedgeHandler.SetIsFreehang(false);
 
@@ -458,7 +481,7 @@ void UThreadTalesTraversalComponent::Multicast_HopUp_Implementation(const FVecto
 	}
 
 	LedgeHandler.StopAllClimbingMontages(CharacterOwner);
-	LedgeHandler.SetClimbingSubState(EThreadTalesClimbingSubState::JumpTransition);
+	SetClimbingSubState(EThreadTalesClimbingSubState::JumpTransition);
 	UAnimMontage* Montage = GetJumpMontage(EThreadTalesLedgeJumpDirection::Up, EThreadTalesLedgeJumpDistanceType::Short);
 	LedgeHandler.Internal_StartTransition(Montage, TargetLedgeLoc, TargetWallNormal, this, CharacterOwner, -1.0f, EThreadTalesLedgeJumpDistanceType::Short);
 }
@@ -476,7 +499,7 @@ void UThreadTalesTraversalComponent::Multicast_SideJump_Implementation(float Dir
 	}
 
 	LedgeHandler.StopAllClimbingMontages(CharacterOwner);
-	LedgeHandler.SetClimbingSubState(EThreadTalesClimbingSubState::JumpTransition);
+	SetClimbingSubState(EThreadTalesClimbingSubState::JumpTransition);
 	const EThreadTalesLedgeJumpDirection Dir = (DirectionSign < 0.0f) ? EThreadTalesLedgeJumpDirection::Left : EThreadTalesLedgeJumpDirection::Right;
 	UAnimMontage* Montage = GetJumpMontage(Dir, EThreadTalesLedgeJumpDistanceType::Short);
 	LedgeHandler.Internal_StartTransition(Montage, TargetLedgeLoc, TargetWallNormal, this, CharacterOwner, -1.0f, EThreadTalesLedgeJumpDistanceType::Short);
@@ -495,7 +518,7 @@ void UThreadTalesTraversalComponent::Multicast_LedgeJump_Implementation(EThreadT
 	}
 
 	LedgeHandler.StopAllClimbingMontages(CharacterOwner);
-	LedgeHandler.SetClimbingSubState(EThreadTalesClimbingSubState::JumpTransition);
+	SetClimbingSubState(EThreadTalesClimbingSubState::JumpTransition);
 	UAnimMontage* Montage = (Direction == EThreadTalesLedgeJumpDirection::Down && DistanceType == EThreadTalesLedgeJumpDistanceType::Leap && GetActiveBackJumpMontage())
 		? GetActiveBackJumpMontage()
 		: GetJumpMontage(Direction, DistanceType);
@@ -515,7 +538,7 @@ void UThreadTalesTraversalComponent::Multicast_StartShimmy_Implementation(float 
 	}
 
 	LedgeHandler.StopAllClimbingMontages(CharacterOwner);
-	LedgeHandler.SetClimbingSubState(EThreadTalesClimbingSubState::Shimmying);
+	SetClimbingSubState(EThreadTalesClimbingSubState::Shimmying);
 	UAnimMontage* Montage = GetActiveShimmyMontage(DirectionSign < 0.0f);
 	LedgeHandler.Internal_StartTransition(Montage, TargetLedgeLoc, TargetWallNormal, this, CharacterOwner);
 }
@@ -533,7 +556,7 @@ void UThreadTalesTraversalComponent::Multicast_PlayClimbMontage_Implementation(U
 		return;
 	}
 
-	LedgeHandler.SetClimbingSubState(EThreadTalesClimbingSubState::MantleUp);
+	SetClimbingSubState(EThreadTalesClimbingSubState::MantleUp);
 	LedgeHandler.StopAllClimbingMontages(CharacterOwner);
 
 	if (UCharacterMovementComponent* MoveComp = CharacterOwner->GetCharacterMovement())
@@ -578,7 +601,7 @@ void UThreadTalesTraversalComponent::Multicast_ClimbDown_Implementation(const FV
 
 	bIsFreehang = bFreehang;
 	LedgeHandler.SetIsFreehang(bFreehang);
-	LedgeHandler.SetClimbingSubState(EThreadTalesClimbingSubState::ClimbDown);
+	SetClimbingSubState(EThreadTalesClimbingSubState::ClimbDown);
 	LedgeHandler.SetCachedLedgeLocation(LedgeLocation);
 	LedgeHandler.SetCachedWallNormal(WallNormal);
 
@@ -625,7 +648,7 @@ void UThreadTalesTraversalComponent::Multicast_WallEject_Implementation()
 	}
 
 	LedgeHandler.StopAllClimbingMontages(CharacterOwner);
-	LedgeHandler.SetClimbingSubState(EThreadTalesClimbingSubState::None);
+	SetClimbingSubState(EThreadTalesClimbingSubState::None);
 	bIsFreehang = false;
 	LedgeHandler.SetIsFreehang(false);
 
@@ -662,6 +685,7 @@ void UThreadTalesTraversalComponent::Multicast_StartCornerTransition_Implementat
 		return;
 	}
 
+	SetClimbingSubState(EThreadTalesClimbingSubState::CornerTransition);
 	LedgeHandler.StartCornerTransition(DirectionSign, CornerType, CornerPivotLoc, TargetLedgeLoc, TargetWallNormal, this, CharacterOwner);
 }
 

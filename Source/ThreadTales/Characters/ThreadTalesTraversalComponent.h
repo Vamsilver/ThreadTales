@@ -18,6 +18,7 @@ class UAnimInstance;
 class UThreadTalesClimbingConfig;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnTraversalStateChangedDelegate, EThreadTalesTraversalState, NewState, EThreadTalesTraversalState, OldState);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnClimbingSubStateChangedDelegate, EThreadTalesClimbingSubState, NewSubState, EThreadTalesClimbingSubState, OldSubState);
 
 /**
  * Core coordinator component for character traversal and climbing mechanics.
@@ -55,11 +56,14 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "ThreadTales|Traversal")
 	FOnTraversalStateChangedDelegate OnTraversalStateChanged;
 
+	UPROPERTY(BlueprintAssignable, Category = "ThreadTales|Traversal")
+	FOnClimbingSubStateChangedDelegate OnClimbingSubStateChanged;
+
 	UFUNCTION(BlueprintPure, Category = "ThreadTales|Traversal")
 	EThreadTalesTraversalState GetTraversalState() const { return CurrentTraversalState; }
 
 	UFUNCTION(BlueprintPure, Category = "ThreadTales|Traversal")
-	EThreadTalesClimbingSubState GetClimbingSubState() const { return LedgeHandler.GetClimbingSubState(); }
+	EThreadTalesClimbingSubState GetClimbingSubState() const { return CurrentClimbingSubState; }
 
 	UFUNCTION(BlueprintPure, Category = "ThreadTales|Traversal")
 	bool IsLedgeClimbing() const { return CurrentTraversalState == EThreadTalesTraversalState::LedgeClimbing; }
@@ -215,6 +219,7 @@ public:
 	float GetWallEjectRegrabCooldown() const;
 
 	void SetTraversalState(EThreadTalesTraversalState NewState);
+	void SetClimbingSubState(EThreadTalesClimbingSubState NewSubState);
 
 	// Network RPCs (called by LedgeHandler)
 	UFUNCTION(Server, Reliable)
@@ -298,11 +303,17 @@ protected:
 	UPROPERTY(ReplicatedUsing = OnRep_TraversalState, VisibleInstanceOnly, BlueprintReadOnly, Category = "ThreadTales|Traversal|State")
 	EThreadTalesTraversalState CurrentTraversalState;
 
+	UPROPERTY(ReplicatedUsing = OnRep_ClimbingSubState, VisibleInstanceOnly, BlueprintReadOnly, Category = "ThreadTales|Traversal|State")
+	EThreadTalesClimbingSubState CurrentClimbingSubState;
+
 	UPROPERTY(Replicated, VisibleInstanceOnly, BlueprintReadOnly, Category = "ThreadTales|Traversal|State")
 	bool bIsFreehang;
 
 	UFUNCTION()
 	void OnRep_TraversalState(EThreadTalesTraversalState OldState);
+
+	UFUNCTION()
+	void OnRep_ClimbingSubState(EThreadTalesClimbingSubState OldSubState);
 
 private:
 	UPROPERTY()

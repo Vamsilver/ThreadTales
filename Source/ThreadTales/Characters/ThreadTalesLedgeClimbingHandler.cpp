@@ -126,9 +126,19 @@ void FThreadTalesLedgeClimbingHandler::Tick(float DeltaTime, UThreadTalesTravers
 
 		CharacterOwner->SetActorLocationAndRotation(NewLoc, NewRot, false, nullptr, ETeleportType::TeleportPhysics);
 
+		// Synchronously update camera rotation during corner transitions (local player only)
+		if (ClimbingSubState == EThreadTalesClimbingSubState::CornerTransition && CharacterOwner->IsLocallyControlled())
+		{
+			if (APlayerController* PC = Cast<APlayerController>(CharacterOwner->GetController()))
+			{
+				CameraHandler.Tick(DeltaTime, TransitionTimer, PC, OwnerComp->ClimbingConfig);
+			}
+		}
+
 		if (NormalizedTime >= 1.0f)
 		{
-			ClimbingSubState = EThreadTalesClimbingSubState::IdleHang;
+			CameraHandler.Reset();
+			OwnerComp->SetClimbingSubState(EThreadTalesClimbingSubState::IdleHang);
 			ActiveCornerType = EThreadTalesCornerType::None;
 			CachedLedgeLocation = PendingTargetLedgeLocation;
 			CachedWallNormal = PendingTargetWallNormal;
@@ -388,7 +398,7 @@ void FThreadTalesLedgeClimbingHandler::StartLedgeClimb(const FVector& LedgeLocat
 
 	bIsFreehang = FThreadTalesLedgeDetector::CheckIsFreehangLedge(CharacterOwner, OwnerComp->ClimbingConfig, OwnerComp->bDrawDebugTraces, LedgeLocation, WallNormal);
 	OwnerComp->SetIsFreehang(bIsFreehang);
-	ClimbingSubState = EThreadTalesClimbingSubState::IdleHang;
+	OwnerComp->SetClimbingSubState(EThreadTalesClimbingSubState::IdleHang);
 	CachedLedgeLocation = LedgeLocation;
 	CachedWallNormal = WallNormal;
 
@@ -424,11 +434,13 @@ void FThreadTalesLedgeClimbingHandler::ReleaseLedge(UThreadTalesTraversalCompone
 		return;
 	}
 
+	CameraHandler.Reset();
 	StopAllClimbingMontages(CharacterOwner);
 	if (ClimbingSubState == EThreadTalesClimbingSubState::ClimbDown)
 	{
 		SetClimbDownCollision(false, CharacterOwner);
 	}
+	OwnerComp->SetClimbingSubState(EThreadTalesClimbingSubState::None);
 
 	if (UCharacterMovementComponent* MoveComp = CharacterOwner->GetCharacterMovement())
 	{
@@ -457,6 +469,7 @@ void FThreadTalesLedgeClimbingHandler::Internal_StartTransition(UAnimMontage* Mo
 		return;
 	}
 
+	CameraHandler.Reset();
 	TransitionStartLocation = CharacterOwner->GetActorLocation();
 	TransitionStartRotation = CharacterOwner->GetActorRotation();
 
@@ -474,7 +487,7 @@ void FThreadTalesLedgeClimbingHandler::Internal_StartTransition(UAnimMontage* Mo
 	const bool bIsJump = (!bIsCorner && MontageToPlay != OwnerComp->GetActiveShimmyMontage(true) && MontageToPlay != OwnerComp->GetActiveShimmyMontage(false));
 	if (!bIsCorner)
 	{
-		ClimbingSubState = bIsJump ? EThreadTalesClimbingSubState::JumpTransition : EThreadTalesClimbingSubState::Shimmying;
+		OwnerComp->SetClimbingSubState(bIsJump ? EThreadTalesClimbingSubState::JumpTransition : EThreadTalesClimbingSubState::Shimmying);
 	}
 	TransitionDistanceType = DistanceType;
 	TransitionTimer = 0.0f;
@@ -537,6 +550,21 @@ void FThreadTalesLedgeClimbingHandler::Internal_StartTransition(UAnimMontage* Mo
 
 	TransitionDuration = Duration / FinalPlayRate;
 
+	// Start synchronized camera tracking for corner transition (local player only)
+	if (bIsCorner && CharacterOwner->IsLocallyControlled())
+	{
+		if (APlayerController* PC = Cast<APlayerController>(CharacterOwner->GetController()))
+		{
+			CameraHandler.StartCornerTurn(
+				PC,
+				TransitionStartRotation.Yaw,
+				TransitionTargetRotation.Yaw,
+				TransitionDuration,
+				OwnerComp->ClimbingConfig
+			);
+		}
+	}
+
 	if (MontageToPlay)
 	{
 		CharacterOwner->PlayAnimMontage(MontageToPlay, FinalPlayRate);
@@ -550,7 +578,7 @@ void FThreadTalesLedgeClimbingHandler::HopUp(const FVector& TargetLedgeLoc, cons
 		return;
 	}
 
-	ClimbingSubState = EThreadTalesClimbingSubState::JumpTransition;
+	OwnerComp->SetClimbingSubState(EThreadTalesClimbingSubState::JumpTransition);
 	StopAllClimbingMontages(CharacterOwner);
 
 	UAnimMontage* Montage = GetJumpMontage(EThreadTalesLedgeJumpDirection::Up, EThreadTalesLedgeJumpDistanceType::Short);
@@ -573,7 +601,7 @@ void FThreadTalesLedgeClimbingHandler::SideJump(float DirectionSign, const FVect
 		return;
 	}
 
-	ClimbingSubState = EThreadTalesClimbingSubState::JumpTransition;
+	OwnerComp->SetClimbingSubState(EThreadTalesClimbingSubState::JumpTransition);
 	StopAllClimbingMontages(CharacterOwner);
 
 	const EThreadTalesLedgeJumpDirection Dir = (DirectionSign < 0.0f) ? EThreadTalesLedgeJumpDirection::Left : EThreadTalesLedgeJumpDirection::Right;
@@ -597,7 +625,7 @@ void FThreadTalesLedgeClimbingHandler::PerformLedgeJump(EThreadTalesLedgeJumpDir
 		return;
 	}
 
-	ClimbingSubState = EThreadTalesClimbingSubState::JumpTransition;
+	OwnerComp->SetClimbingSubState(EThreadTalesClimbingSubState::JumpTransition);
 	StopAllClimbingMontages(CharacterOwner);
 
 	UAnimMontage* Montage = GetJumpMontage(Direction, DistanceType);
@@ -620,7 +648,7 @@ void FThreadTalesLedgeClimbingHandler::StartShimmy(float DirectionSign, const FV
 		return;
 	}
 
-	ClimbingSubState = EThreadTalesClimbingSubState::Shimmying;
+	OwnerComp->SetClimbingSubState(EThreadTalesClimbingSubState::Shimmying);
 	StopAllClimbingMontages(CharacterOwner);
 
 	UAnimMontage* Montage = OwnerComp->GetActiveShimmyMontage(DirectionSign < 0.0f);
@@ -643,7 +671,7 @@ void FThreadTalesLedgeClimbingHandler::ClimbUp(UThreadTalesTraversalComponent* O
 		return;
 	}
 
-	ClimbingSubState = EThreadTalesClimbingSubState::MantleUp;
+	OwnerComp->SetClimbingSubState(EThreadTalesClimbingSubState::MantleUp);
 	StopAllClimbingMontages(CharacterOwner);
 
 	if (UCharacterMovementComponent* MoveComp = CharacterOwner->GetCharacterMovement())
@@ -712,7 +740,7 @@ bool FThreadTalesLedgeClimbingHandler::TryClimbDown(UThreadTalesTraversalCompone
 
 	bIsFreehang = bFoundFreehang;
 	OwnerComp->SetIsFreehang(bIsFreehang);
-	ClimbingSubState = EThreadTalesClimbingSubState::ClimbDown;
+	OwnerComp->SetClimbingSubState(EThreadTalesClimbingSubState::ClimbDown);
 	CachedLedgeLocation = LedgeLocation;
 	CachedWallNormal = WallNormal;
 
@@ -803,7 +831,7 @@ void FThreadTalesLedgeClimbingHandler::PerformBackJump(UThreadTalesTraversalComp
 			LeapMont = GetJumpMontage(EThreadTalesLedgeJumpDirection::Down, EThreadTalesLedgeJumpDistanceType::Leap);
 		}
 
-		ClimbingSubState = EThreadTalesClimbingSubState::JumpTransition;
+		OwnerComp->SetClimbingSubState(EThreadTalesClimbingSubState::JumpTransition);
 		StopAllClimbingMontages(CharacterOwner);
 		Internal_StartTransition(LeapMont, BestOpposingLedgeLoc, BestOpposingWallNormal, OwnerComp, CharacterOwner, -1.0f, EThreadTalesLedgeJumpDistanceType::Leap);
 
@@ -830,8 +858,9 @@ void FThreadTalesLedgeClimbingHandler::WallEject(UThreadTalesTraversalComponent*
 		return;
 	}
 
+	CameraHandler.Reset();
 	StopAllClimbingMontages(CharacterOwner);
-	ClimbingSubState = EThreadTalesClimbingSubState::None;
+	OwnerComp->SetClimbingSubState(EThreadTalesClimbingSubState::None);
 	bIsFreehang = false;
 	OwnerComp->SetIsFreehang(false);
 
@@ -911,7 +940,7 @@ void FThreadTalesLedgeClimbingHandler::OnClimbMontageEnded(UAnimMontage* Montage
 
 	if (ClimbingSubState == EThreadTalesClimbingSubState::MantleUp)
 	{
-		ClimbingSubState = EThreadTalesClimbingSubState::None;
+		OwnerComp->SetClimbingSubState(EThreadTalesClimbingSubState::None);
 		bIsFreehang = false;
 		OwnerComp->SetIsFreehang(false);
 		OwnerComp->SetTraversalState(EThreadTalesTraversalState::None);
@@ -989,7 +1018,7 @@ void FThreadTalesLedgeClimbingHandler::OnClimbDownMontageBlendingOut(UAnimMontag
 	{
 		SetClimbDownCollision(false, CharacterOwner);
 		CharacterOwner->SetActorLocationAndRotation(CachedHangLocation, CachedHangRotation, false, nullptr, ETeleportType::TeleportPhysics);
-		ClimbingSubState = EThreadTalesClimbingSubState::IdleHang;
+		OwnerComp->SetClimbingSubState(EThreadTalesClimbingSubState::IdleHang);
 
 		if (UCharacterMovementComponent* MoveComp = CharacterOwner->GetCharacterMovement())
 		{
@@ -1014,7 +1043,7 @@ void FThreadTalesLedgeClimbingHandler::OnClimbDownMontageEnded(UAnimMontage* Mon
 	{
 		SetClimbDownCollision(false, CharacterOwner);
 		CharacterOwner->SetActorLocationAndRotation(CachedHangLocation, CachedHangRotation, false, nullptr, ETeleportType::TeleportPhysics);
-		ClimbingSubState = EThreadTalesClimbingSubState::IdleHang;
+		OwnerComp->SetClimbingSubState(EThreadTalesClimbingSubState::IdleHang);
 
 		if (OwnerComp->GetTraversalState() == EThreadTalesTraversalState::LedgeClimbing)
 		{
@@ -1111,7 +1140,7 @@ void FThreadTalesLedgeClimbingHandler::StartCornerTransition(
 	// Cache corner data before entering transition
 	CornerTransitionPivotLocation = CornerPivotLoc;
 	ActiveCornerType              = CornerType;
-	ClimbingSubState              = EThreadTalesClimbingSubState::CornerTransition;
+	OwnerComp->SetClimbingSubState(EThreadTalesClimbingSubState::CornerTransition);
 
 	StopAllClimbingMontages(CharacterOwner);
 

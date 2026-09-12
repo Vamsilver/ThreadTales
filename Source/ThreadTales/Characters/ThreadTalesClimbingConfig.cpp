@@ -144,4 +144,8 @@ UThreadTalesClimbingConfig::UThreadTalesClimbingConfig()
 	CornerProbeDistance = 80.0f;
 	// CornerInwardProbeDepth: 30cm past the pivot to reliably sample the new wall face
 	CornerInwardProbeDepth = 30.0f;
+
+	// Camera Tuning
+	bEnableCornerCameraTurn = true;
+	CornerCameraTurnInterpSpeed = 5.0f;
 }
