@@ -102,7 +102,7 @@ void FThreadTalesLedgeClimbingHandler::Tick(float DeltaTime, UThreadTalesTravers
 
 		if (ClimbingSubState == EThreadTalesClimbingSubState::GrabCatch)
 		{
-			const float SnapDuration = FMath::Max(OwnerComp->ClimbingConfig ? OwnerComp->ClimbingConfig->GrabCatchDuration : 0.20f, 0.05f);
+			const float SnapDuration = FMath::Max(OwnerComp->ClimbingConfig ? OwnerComp->ClimbingConfig->GrabCatchDuration : 0.25f, 0.05f);
 			const float SnapNormalizedTime = FMath::Clamp(TransitionTimer / SnapDuration, 0.0f, 1.0f);
 			const float Alpha = FMath::InterpEaseOut(0.0f, 1.0f, SnapNormalizedTime, 2.5f);
 			NewLoc = FMath::Lerp(TransitionStartLocation, TransitionTargetLocation, Alpha);
@@ -191,9 +191,12 @@ void FThreadTalesLedgeClimbingHandler::Tick(float DeltaTime, UThreadTalesTravers
 					FVector NextLedgeLoc;
 					FVector NextWallNormal;
 					bool bNextContinuous = false;
-					if (FThreadTalesLedgeDetector::FindSideLedge(CharacterOwner, OwnerComp->ClimbingConfig, OwnerComp->bDrawDebugTraces, CachedLedgeLocation, CachedWallNormal, NextDirSign, false, NextLedgeLoc, NextWallNormal, bNextContinuous) && bNextContinuous)
+					bool bNextIsFreehang = false;
+					if (FThreadTalesLedgeDetector::FindSideLedge(CharacterOwner, OwnerComp->ClimbingConfig, OwnerComp->bDrawDebugTraces, CachedLedgeLocation, CachedWallNormal, NextDirSign, false, NextLedgeLoc, NextWallNormal, bNextContinuous, &bNextIsFreehang) && bNextContinuous)
 					{
 						bChainedShimmy = true;
+						bIsFreehang = bNextIsFreehang;
+						OwnerComp->SetIsFreehang(bIsFreehang);
 						StartShimmy(NextDirSign, NextLedgeLoc, NextWallNormal, OwnerComp, CharacterOwner);
 					}
 				}
@@ -201,8 +204,8 @@ void FThreadTalesLedgeClimbingHandler::Tick(float DeltaTime, UThreadTalesTravers
 
 			if (!bChainedShimmy)
 			{
-				ShimmyCooldownTimer = bWasGrabCatch ? 0.05f : 0.08f;
-				ClimbingInputDebounceTimer = bWasGrabCatch ? 0.10f : 0.35f;
+				ShimmyCooldownTimer = bWasGrabCatch ? 0.0f : 0.08f;
+				ClimbingInputDebounceTimer = bWasGrabCatch ? 0.0f : 0.35f;
 				CrossfadeToHangMontage(OwnerComp, CharacterOwner);
 			}
 		}
@@ -212,6 +215,17 @@ void FThreadTalesLedgeClimbingHandler::Tick(float DeltaTime, UThreadTalesTravers
 	// 2. While hanging on ledge (IdleHang), hard-anchor and process input
 	if (OwnerComp->GetTraversalState() == EThreadTalesTraversalState::LedgeClimbing && ClimbingSubState == EThreadTalesClimbingSubState::IdleHang)
 	{
+		// Safeguard: Ensure hang montage is active and seamlessly sustained while in IdleHang (prevents AnimGraph pose leaks)
+		if (UAnimInstance* AnimInst = CharacterOwner->GetMesh() ? CharacterOwner->GetMesh()->GetAnimInstance() : nullptr)
+		{
+			UAnimMontage* CurrentMont = AnimInst->GetCurrentActiveMontage();
+			UAnimMontage* ActiveHangMont = OwnerComp->GetActiveHangMontage(bIsFreehang);
+			if (!CurrentMont || CurrentMont != ActiveHangMont || !AnimInst->Montage_IsPlaying(ActiveHangMont))
+			{
+				CrossfadeToHangMontage(OwnerComp, CharacterOwner);
+			}
+		}
+
 		if (CharacterOwner->IsLocallyControlled())
 		{
 			APlayerController* PC = Cast<APlayerController>(CharacterOwner->GetController());
@@ -267,9 +281,12 @@ void FThreadTalesLedgeClimbingHandler::ProcessInput(const APlayerController* PC,
 			FVector SideLedgeLoc;
 			FVector SideWallNormal;
 			bool bIsContinuous = false;
-			if (FThreadTalesLedgeDetector::FindSideLedge(CharacterOwner, OwnerComp->ClimbingConfig, OwnerComp->bDrawDebugTraces, CachedLedgeLocation, CachedWallNormal, SideSign, false, SideLedgeLoc, SideWallNormal, bIsContinuous) && bIsContinuous)
+			bool bSideIsFreehang = false;
+			if (FThreadTalesLedgeDetector::FindSideLedge(CharacterOwner, OwnerComp->ClimbingConfig, OwnerComp->bDrawDebugTraces, CachedLedgeLocation, CachedWallNormal, SideSign, false, SideLedgeLoc, SideWallNormal, bIsContinuous, &bSideIsFreehang) && bIsContinuous)
 			{
 				ClimbingInputDebounceTimer = OwnerComp->GetShimmyInputDebounceDuration();
+				bIsFreehang = bSideIsFreehang;
+				OwnerComp->SetIsFreehang(bIsFreehang);
 				StartShimmy(SideSign, SideLedgeLoc, SideWallNormal, OwnerComp, CharacterOwner);
 				return;
 			}
@@ -314,6 +331,8 @@ void FThreadTalesLedgeClimbingHandler::ProcessInput(const APlayerController* PC,
 	{
 		ClimbingInputDebounceTimer = OwnerComp->GetJumpInputDebounceDuration();
 		ContinuousScanThrottleTimer = 0.0f;
+		bIsFreehang = BestCandidate.bIsFreehang;
+		OwnerComp->SetIsFreehang(bIsFreehang);
 		PerformLedgeJump(BestCandidate.Direction, BestCandidate.DistanceType, BestCandidate.LedgeLocation, BestCandidate.WallNormal, OwnerComp, CharacterOwner);
 		return;
 	}
@@ -437,8 +456,6 @@ void FThreadTalesLedgeClimbingHandler::StartLedgeClimb(const FVector& LedgeLocat
 		CharacterOwner->bUseControllerRotationYaw = false;
 	}
 
-	StopAllClimbingMontages(CharacterOwner);
-
 	TransitionStartLocation = CharacterOwner->GetActorLocation();
 	TransitionStartRotation = CharacterOwner->GetActorRotation();
 	TransitionTargetLocation = CachedHangLocation;
@@ -451,8 +468,13 @@ void FThreadTalesLedgeClimbingHandler::StartLedgeClimb(const FVector& LedgeLocat
 	if (GrabMontage)
 	{
 		const float BlendOut = GrabMontage->BlendOut.GetBlendTime() > 0.0f ? GrabMontage->BlendOut.GetBlendTime() : 0.20f;
-		TransitionDuration = FMath::Max(GrabMontage->GetPlayLength() - BlendOut, 0.15f);
-		CharacterOwner->PlayAnimMontage(GrabMontage, OwnerComp->GetClimbAnimPlayRateMultiplier());
+		const float ConfigGrabRate = OwnerComp->ClimbingConfig
+			? (bIsFreehang ? OwnerComp->ClimbingConfig->BarGrabPlayRate : OwnerComp->ClimbingConfig->GrabPlayRate)
+			: (bIsFreehang ? 2.3f : 1.4f);
+		const float GrabPlayRate = ConfigGrabRate * OwnerComp->GetClimbAnimPlayRateMultiplier();
+		const float EffectivePlayRate = GrabPlayRate * (GrabMontage->RateScale > 0.0f ? GrabMontage->RateScale : 1.0f);
+		TransitionDuration = FMath::Max((GrabMontage->GetPlayLength() - BlendOut) / EffectivePlayRate, 0.15f);
+		CharacterOwner->PlayAnimMontage(GrabMontage, GrabPlayRate);
 	}
 	else
 	{
@@ -586,6 +608,16 @@ void FThreadTalesLedgeClimbingHandler::Internal_StartTransition(UAnimMontage* Mo
 				FinalPlayRate = 1.0f;
 				break;
 			}
+
+			// Synchronize montage playback speed with the jump duration so that the montage reaches its
+			// blend-out trigger point at the exact instant the kinematic transition completes and CrossfadeToHangMontage is called!
+			// This prevents ANY gap or leak of the underlying AnimGraph pose.
+			if (MontageToPlay && Duration > 0.0f && FinalPlayRate == 1.0f)
+			{
+				const float BlendOutTime = MontageToPlay->BlendOut.GetBlendTime() > 0.0f ? MontageToPlay->BlendOut.GetBlendTime() : 0.20f;
+				const float ActiveDuration = FMath::Max(MontageToPlay->GetPlayLength() - BlendOutTime, 0.1f);
+				FinalPlayRate = ActiveDuration / Duration;
+			}
 		}
 		else if (MontageToPlay)
 		{
@@ -600,7 +632,7 @@ void FThreadTalesLedgeClimbingHandler::Internal_StartTransition(UAnimMontage* Mo
 		}
 	}
 
-	TransitionDuration = Duration / FinalPlayRate;
+	TransitionDuration = bIsJump ? Duration : (Duration / FinalPlayRate);
 
 	// Start synchronized camera tracking for corner transition (local player only)
 	if (bIsCorner && CharacterOwner->IsLocallyControlled())
@@ -631,7 +663,9 @@ void FThreadTalesLedgeClimbingHandler::HopUp(const FVector& TargetLedgeLoc, cons
 	}
 
 	OwnerComp->SetClimbingSubState(EThreadTalesClimbingSubState::JumpTransition);
-	StopAllClimbingMontages(CharacterOwner);
+
+	bIsFreehang = FThreadTalesLedgeDetector::CheckIsFreehangLedge(CharacterOwner, OwnerComp->ClimbingConfig, OwnerComp->bDrawDebugTraces, TargetLedgeLoc, TargetWallNormal);
+	OwnerComp->SetIsFreehang(bIsFreehang);
 
 	UAnimMontage* Montage = OwnerComp->GetJumpMontage(EThreadTalesLedgeJumpDirection::Up, EThreadTalesLedgeJumpDistanceType::Short, bIsFreehang);
 	Internal_StartTransition(Montage, TargetLedgeLoc, TargetWallNormal, OwnerComp, CharacterOwner, -1.0f, EThreadTalesLedgeJumpDistanceType::Short);
@@ -654,7 +688,9 @@ void FThreadTalesLedgeClimbingHandler::SideJump(float DirectionSign, const FVect
 	}
 
 	OwnerComp->SetClimbingSubState(EThreadTalesClimbingSubState::JumpTransition);
-	StopAllClimbingMontages(CharacterOwner);
+
+	bIsFreehang = FThreadTalesLedgeDetector::CheckIsFreehangLedge(CharacterOwner, OwnerComp->ClimbingConfig, OwnerComp->bDrawDebugTraces, TargetLedgeLoc, TargetWallNormal);
+	OwnerComp->SetIsFreehang(bIsFreehang);
 
 	const EThreadTalesLedgeJumpDirection Dir = (DirectionSign < 0.0f) ? EThreadTalesLedgeJumpDirection::Left : EThreadTalesLedgeJumpDirection::Right;
 	UAnimMontage* Montage = OwnerComp->GetJumpMontage(Dir, EThreadTalesLedgeJumpDistanceType::Short, bIsFreehang);
@@ -678,7 +714,9 @@ void FThreadTalesLedgeClimbingHandler::PerformLedgeJump(EThreadTalesLedgeJumpDir
 	}
 
 	OwnerComp->SetClimbingSubState(EThreadTalesClimbingSubState::JumpTransition);
-	StopAllClimbingMontages(CharacterOwner);
+
+	bIsFreehang = FThreadTalesLedgeDetector::CheckIsFreehangLedge(CharacterOwner, OwnerComp->ClimbingConfig, OwnerComp->bDrawDebugTraces, TargetLedgeLoc, TargetWallNormal);
+	OwnerComp->SetIsFreehang(bIsFreehang);
 
 	UAnimMontage* Montage = OwnerComp->GetJumpMontage(Direction, DistanceType, bIsFreehang);
 	Internal_StartTransition(Montage, TargetLedgeLoc, TargetWallNormal, OwnerComp, CharacterOwner, -1.0f, DistanceType);
@@ -701,7 +739,9 @@ void FThreadTalesLedgeClimbingHandler::StartShimmy(float DirectionSign, const FV
 	}
 
 	OwnerComp->SetClimbingSubState(EThreadTalesClimbingSubState::Shimmying);
-	StopAllClimbingMontages(CharacterOwner);
+
+	bIsFreehang = FThreadTalesLedgeDetector::CheckIsFreehangLedge(CharacterOwner, OwnerComp->ClimbingConfig, OwnerComp->bDrawDebugTraces, TargetLedgeLoc, TargetWallNormal);
+	OwnerComp->SetIsFreehang(bIsFreehang);
 
 	UAnimMontage* Montage = OwnerComp->GetActiveShimmyMontage(DirectionSign < 0.0f, bIsFreehang);
 	Internal_StartTransition(Montage, TargetLedgeLoc, TargetWallNormal, OwnerComp, CharacterOwner);
@@ -724,7 +764,6 @@ void FThreadTalesLedgeClimbingHandler::ClimbUp(UThreadTalesTraversalComponent* O
 	}
 
 	OwnerComp->SetClimbingSubState(EThreadTalesClimbingSubState::MantleUp);
-	StopAllClimbingMontages(CharacterOwner);
 
 	if (UCharacterMovementComponent* MoveComp = CharacterOwner->GetCharacterMovement())
 	{
@@ -952,12 +991,16 @@ void FThreadTalesLedgeClimbingHandler::CrossfadeToHangMontage(UThreadTalesTraver
 		return;
 	}
 
+	// Re-verify freehang state at the settled anchor location to ensure accurate montage selection
+	bIsFreehang = FThreadTalesLedgeDetector::CheckIsFreehangLedge(CharacterOwner, OwnerComp->ClimbingConfig, OwnerComp->bDrawDebugTraces, CachedLedgeLocation, CachedWallNormal);
+	OwnerComp->SetIsFreehang(bIsFreehang);
+
 	UAnimMontage* ActiveHangMont = OwnerComp->GetActiveHangMontage(bIsFreehang);
 	if (ActiveHangMont)
 	{
 		if (UAnimInstance* AnimInst = CharacterOwner->GetMesh() ? CharacterOwner->GetMesh()->GetAnimInstance() : nullptr)
 		{
-			if (AnimInst->Montage_IsPlaying(ActiveHangMont))
+			if (AnimInst->GetCurrentActiveMontage() == ActiveHangMont && AnimInst->Montage_IsPlaying(ActiveHangMont))
 			{
 				return;
 			}
@@ -1192,7 +1235,8 @@ void FThreadTalesLedgeClimbingHandler::StartCornerTransition(
 	ActiveCornerType              = CornerType;
 	OwnerComp->SetClimbingSubState(EThreadTalesClimbingSubState::CornerTransition);
 
-	StopAllClimbingMontages(CharacterOwner);
+	bIsFreehang = FThreadTalesLedgeDetector::CheckIsFreehangLedge(CharacterOwner, OwnerComp->ClimbingConfig, OwnerComp->bDrawDebugTraces, TargetLedgeLoc, TargetWallNormal);
+	OwnerComp->SetIsFreehang(bIsFreehang);
 
 	// Select montage (dedicated Corner montage, or fallback to Shimmy montage)
 	UAnimMontage* CornerMontage = GetCornerMontage(DirectionSign, CornerType, OwnerComp);

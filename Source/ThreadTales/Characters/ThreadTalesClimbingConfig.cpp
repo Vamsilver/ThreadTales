@@ -11,6 +11,8 @@ UThreadTalesClimbingConfig::UThreadTalesClimbingConfig()
 	// Playback Rate Multipliers
 	ClimbAnimPlayRateMultiplier = 1.0f;
 	ClimbBackJumpPlayRate = 1.35f;
+	GrabPlayRate = 1.4f;
+	BarGrabPlayRate = 2.3f;
 
 	// Kinematics & Jump Timings
 	GrabCatchDuration = 0.20f;
@@ -120,8 +122,8 @@ UThreadTalesClimbingConfig::UThreadTalesClimbingConfig()
 
 	// Sensing & Freehang
 	FreehangWallCheckDepth = 70.0f;
-	FreehangWallTraceForward = 35.0f;
-	FreehangWallTraceBack = 25.0f;
+	FreehangWallTraceForward = 12.0f;
+	FreehangWallTraceBack = 5.0f;
 
 	// Sensing & Climb Down Probing
 	ClimbDownFloorTraceForwardDist = 8.0f;

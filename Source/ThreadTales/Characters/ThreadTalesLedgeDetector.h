@@ -24,7 +24,8 @@ public:
 		const UThreadTalesClimbingConfig* Config,
 		bool bDrawDebugTraces,
 		FVector& OutLedgeLocation,
-		FVector& OutWallNormal
+		FVector& OutWallNormal,
+		bool* OutIsFreehang = nullptr
 	);
 
 	/** Multi-level raycast sweep against the forward surface */
@@ -44,6 +45,26 @@ public:
 		const FHitResult& ForwardHit,
 		const FVector& WallNormal2D,
 		FHitResult& OutTopHit
+	);
+
+	/**
+	 * Unified Ledge Verification Pipeline:
+	 * Given an approximate wall probe location, a detected top surface Z, and approximate wall normal:
+	 * 1. Pinpoints exact 3D edge (intersection of top surface and vertical wall face).
+	 * 2. Validates physical shelf depth (ShelfDepth >= 3.5 cm) and body clearance (32 cm sphere).
+	 * 3. Validates both left and right hands placement on stable ledge surface.
+	 * 4. Checks foot-brace support to classify Freehang vs Braced hang.
+	 *
+	 * @return true if candidate is a completely valid, grabbable ledge.
+	 */
+	static bool PinpointAndValidateLedge(
+		const ACharacter* Character,
+		const UThreadTalesClimbingConfig* Config,
+		bool bDrawDebugTraces,
+		const FVector& ProbeLocationOnWall,
+		float LedgeTopZ,
+		const FVector& ApproximateWallNormal2D,
+		FThreadTalesLedgeAnalysisResult& OutResult
 	);
 
 	/** Validates that a detected candidate ledge edge has a true physical lip and sufficient body clearance */
@@ -95,7 +116,8 @@ public:
 		bool bForJump,
 		FVector& OutLedgeLoc,
 		FVector& OutWallNormal,
-		bool& bOutIsContinuous
+		bool& bOutIsContinuous,
+		bool* OutIsFreehang = nullptr
 	);
 
 	/** Probes for a target ledge in one of the 8 directions with Short, Long, or Leap distance parameter */

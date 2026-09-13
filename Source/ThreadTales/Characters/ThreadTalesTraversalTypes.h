@@ -99,8 +99,30 @@ struct FThreadTalesLedgeJumpConfig
 };
 
 /**
+ * Result of the Unified Ledge Verification Pipeline (PinpointAndValidateLedge).
+ * Encapsulates millimeter-accurate 3D edge coordinates, refined 2D wall normal, and Freehang classification.
+ */
+USTRUCT(BlueprintType)
+struct FThreadTalesLedgeAnalysisResult
+{
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "ThreadTales|Traversal")
+	bool bIsValid = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "ThreadTales|Traversal")
+	FVector ExactLedgeEdge = FVector::ZeroVector;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "ThreadTales|Traversal")
+	FVector RefinedWallNormal = FVector::ZeroVector;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "ThreadTales|Traversal")
+	bool bIsFreehang = false;
+};
+
+/**
  * Candidate ledge detected by the 3D Radial Ledge Scanner.
- * Holds exact 3D geometry, classified direction/tier, and heuristic ranking score.
+ * Holds exact 3D geometry, classified direction/tier, heuristic ranking score, and freehang classification.
  */
 USTRUCT(BlueprintType)
 struct FThreadTalesLedgeCandidate
@@ -124,6 +146,9 @@ struct FThreadTalesLedgeCandidate
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "ThreadTales|Traversal|Scanner")
 	float Score = 0.0f;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "ThreadTales|Traversal|Scanner")
+	bool bIsFreehang = false;
 
 	bool IsValid() const
 	{
