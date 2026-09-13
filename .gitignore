@@ -30,3 +30,6 @@ Windows/
 AGENTS.md
 GEMINI.md
 .agents/
+
+# Graphify Knowledge Graph
+graphify-out/

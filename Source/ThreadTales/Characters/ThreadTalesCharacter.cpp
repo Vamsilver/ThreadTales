@@ -6,6 +6,7 @@
 #include "Abilities/ThreadTalesAttributeSet.h"
 #include "Abilities/ThreadTalesGA_Evade.h"
 #include "Characters/ThreadTalesEquipmentComponent.h"
+#include "Characters/ThreadTalesTraversalComponent.h"
 #include "Combat/ThreadTalesWeapon.h"
 #include "Input/ThreadTalesInputConfig.h"
 #include "Input/ThreadTalesInputComponent.h"
@@ -47,6 +48,9 @@ AThreadTalesCharacter::AThreadTalesCharacter()
 
 	// Create equipment manager
 	EquipmentComponent = CreateDefaultSubobject<UThreadTalesEquipmentComponent>(TEXT("EquipmentComponent"));
+
+	// Create traversal manager
+	TraversalComponent = CreateDefaultSubobject<UThreadTalesTraversalComponent>(TEXT("TraversalComponent"));
 
 	// Enable solid Pawn-to-Pawn collision blocking so characters cannot walk through each other
 	if (GetCapsuleComponent())
@@ -171,6 +175,11 @@ void AThreadTalesCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInp
 
 void AThreadTalesCharacter::Input_AbilityInputTagPressed(FGameplayTag InputTag)
 {
+	if (InputTag.MatchesTagExact(ThreadTalesGameplayTags::TAG_Input_Ability_Jump))
+	{
+		Jump();
+	}
+
 	if (AbilitySystemComponent)
 	{
 		AbilitySystemComponent->AbilityInputTagPressed(InputTag);
@@ -179,6 +188,11 @@ void AThreadTalesCharacter::Input_AbilityInputTagPressed(FGameplayTag InputTag)
 
 void AThreadTalesCharacter::Input_AbilityInputTagReleased(FGameplayTag InputTag)
 {
+	if (InputTag.MatchesTagExact(ThreadTalesGameplayTags::TAG_Input_Ability_Jump))
+	{
+		StopJumping();
+	}
+
 	if (AbilitySystemComponent)
 	{
 		AbilitySystemComponent->AbilityInputTagReleased(InputTag);
@@ -423,8 +437,73 @@ bool AThreadTalesCharacter::IsDoubleJumping() const
 	return JumpCurrentCount > 1;
 }
 
+void AThreadTalesCharacter::RequestReleaseLedge()
+{
+	if (TraversalComponent && TraversalComponent->IsLedgeClimbing())
+	{
+		TraversalComponent->ReleaseLedge();
+	}
+}
+
+bool AThreadTalesCharacter::TryClimbDown()
+{
+	if (TraversalComponent)
+	{
+		return TraversalComponent->TryClimbDown();
+	}
+	return false;
+}
+
+void AThreadTalesCharacter::Crouch(bool bClientSimulation)
+{
+	if (TraversalComponent)
+	{
+		if (TraversalComponent->IsLedgeClimbing())
+		{
+			TraversalComponent->ReleaseLedge();
+			return;
+		}
+		else if (TraversalComponent->TryClimbDown())
+		{
+			return;
+		}
+	}
+
+	Super::Crouch(bClientSimulation);
+}
+
+void AThreadTalesCharacter::AddMovementInput(FVector WorldDirection, float ScaleValue, bool bForce)
+{
+	if (TraversalComponent && TraversalComponent->IsLedgeClimbing())
+	{
+		// Suppress feeding movement input into CharacterMovement / Mover while climbing on ledge.
+		// TraversalComponent handles direct WASD climbing navigation.
+		return;
+	}
+
+	Super::AddMovementInput(WorldDirection, ScaleValue, bForce);
+}
+
+void AThreadTalesCharacter::FaceRotation(FRotator NewControlRotation, float DeltaTime)
+{
+	if (TraversalComponent && TraversalComponent->IsLedgeClimbing())
+	{
+		// Suppress controller/camera rotation from rotating the actor while climbing on ledge.
+		// Ledge orientation is driven strictly by wall normal and kinematics.
+		return;
+	}
+
+	Super::FaceRotation(NewControlRotation, DeltaTime);
+}
+
 void AThreadTalesCharacter::Jump()
 {
+	if (TraversalComponent && TraversalComponent->IsLedgeClimbing())
+	{
+		TraversalComponent->HandleLedgeJumpInput(true);
+		return;
+	}
+
 	if (GetCharacterMovement() && GetCharacterMovement()->IsFalling() && !bHasDoubleJumpedInAir)
 	{
 		bHasDoubleJumpedInAir = true;
