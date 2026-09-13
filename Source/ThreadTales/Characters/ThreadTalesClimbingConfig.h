@@ -128,13 +128,25 @@ public:
 	TObjectPtr<UAnimMontage> BarClimbHopUpMontage;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Montages|Short")
+	TObjectPtr<UAnimMontage> BarClimbJumpUpRightMontage;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Montages|Short")
+	TObjectPtr<UAnimMontage> BarClimbJumpRightMontage;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Montages|Short")
+	TObjectPtr<UAnimMontage> BarClimbJumpDownRightMontage;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Montages|Short")
 	TObjectPtr<UAnimMontage> BarClimbHopDownMontage;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Montages|Short")
+	TObjectPtr<UAnimMontage> BarClimbJumpDownLeftMontage;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Montages|Short")
 	TObjectPtr<UAnimMontage> BarClimbJumpLeftMontage;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Montages|Short")
-	TObjectPtr<UAnimMontage> BarClimbJumpRightMontage;
+	TObjectPtr<UAnimMontage> BarClimbJumpUpLeftMontage;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Montages|Short")
 	TObjectPtr<UAnimMontage> ClimbHopUpMontage;
@@ -165,6 +177,30 @@ public:
 	// ==========================================
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Montages|Long")
+	TObjectPtr<UAnimMontage> BarLongHopUpMontage;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Montages|Long")
+	TObjectPtr<UAnimMontage> BarLongJumpUpRightMontage;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Montages|Long")
+	TObjectPtr<UAnimMontage> BarLongJumpRightMontage;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Montages|Long")
+	TObjectPtr<UAnimMontage> BarLongJumpDownRightMontage;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Montages|Long")
+	TObjectPtr<UAnimMontage> BarLongHopDownMontage;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Montages|Long")
+	TObjectPtr<UAnimMontage> BarLongJumpDownLeftMontage;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Montages|Long")
+	TObjectPtr<UAnimMontage> BarLongJumpLeftMontage;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Montages|Long")
+	TObjectPtr<UAnimMontage> BarLongJumpUpLeftMontage;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Montages|Long")
 	TObjectPtr<UAnimMontage> ClimbLongHopUpMontage;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Montages|Long")
@@ -191,6 +227,30 @@ public:
 	// ==========================================
 	// LEAP DIRECTIONAL JUMP MONTAGES
 	// ==========================================
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Montages|Leap")
+	TObjectPtr<UAnimMontage> BarLeapHopUpMontage;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Montages|Leap")
+	TObjectPtr<UAnimMontage> BarLeapJumpUpRightMontage;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Montages|Leap")
+	TObjectPtr<UAnimMontage> BarLeapJumpRightMontage;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Montages|Leap")
+	TObjectPtr<UAnimMontage> BarLeapJumpDownRightMontage;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Montages|Leap")
+	TObjectPtr<UAnimMontage> BarLeapHopDownMontage;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Montages|Leap")
+	TObjectPtr<UAnimMontage> BarLeapJumpDownLeftMontage;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Montages|Leap")
+	TObjectPtr<UAnimMontage> BarLeapJumpLeftMontage;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Montages|Leap")
+	TObjectPtr<UAnimMontage> BarLeapJumpUpLeftMontage;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Montages|Leap")
 	TObjectPtr<UAnimMontage> LeapHopUpMontage;
@@ -239,6 +299,14 @@ public:
 	/** Playback rate multiplier for wall eject and back jump montages */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Tuning|Playback", meta = (ClampMin = "0.5", ClampMax = "3.0"))
 	float ClimbBackJumpPlayRate;
+
+	/** Playback rate multiplier for standard wall grab montage (e.g. 1.4 = snappy) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Tuning|Playback", meta = (ClampMin = "0.5", ClampMax = "4.0"))
+	float GrabPlayRate;
+
+	/** Playback rate multiplier for freehang / bar grab montage (e.g. 2.3 = synchronizes 0.48s reach with 0.20s snap) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Tuning|Playback", meta = (ClampMin = "0.5", ClampMax = "4.0"))
+	float BarGrabPlayRate;
 
 	// ==========================================
 	// KINEMATICS & JUMP TIMINGS

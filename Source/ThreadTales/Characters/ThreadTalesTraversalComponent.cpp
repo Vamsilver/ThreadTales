@@ -108,7 +108,13 @@ void UThreadTalesTraversalComponent::TickComponent(float DeltaTime, ELevelTick T
 
 bool UThreadTalesTraversalComponent::DetectLedge(FVector& OutLedgeLocation, FVector& OutWallNormal)
 {
-	return FThreadTalesLedgeDetector::DetectLedge(CharacterOwner, ClimbingConfig, bDrawDebugTraces, OutLedgeLocation, OutWallNormal);
+	bool bDetectedFreehang = false;
+	const bool bFound = FThreadTalesLedgeDetector::DetectLedge(CharacterOwner, ClimbingConfig, bDrawDebugTraces, OutLedgeLocation, OutWallNormal, &bDetectedFreehang);
+	if (bFound)
+	{
+		SetIsFreehang(bDetectedFreehang);
+	}
+	return bFound;
 }
 
 bool UThreadTalesTraversalComponent::FindUpperLedge(FVector& OutLedgeLoc, FVector& OutWallNormal)
@@ -118,7 +124,13 @@ bool UThreadTalesTraversalComponent::FindUpperLedge(FVector& OutLedgeLoc, FVecto
 
 bool UThreadTalesTraversalComponent::FindSideLedge(float DirectionSign, FVector& OutLedgeLoc, FVector& OutWallNormal, bool& bOutIsContinuous, bool bForJump)
 {
-	return FThreadTalesLedgeDetector::FindSideLedge(CharacterOwner, ClimbingConfig, bDrawDebugTraces, LedgeHandler.GetCachedLedgeLocation(), LedgeHandler.GetCachedWallNormal(), DirectionSign, bForJump, OutLedgeLoc, OutWallNormal, bOutIsContinuous);
+	bool bSideIsFreehang = false;
+	const bool bFound = FThreadTalesLedgeDetector::FindSideLedge(CharacterOwner, ClimbingConfig, bDrawDebugTraces, LedgeHandler.GetCachedLedgeLocation(), LedgeHandler.GetCachedWallNormal(), DirectionSign, bForJump, OutLedgeLoc, OutWallNormal, bOutIsContinuous, &bSideIsFreehang);
+	if (bFound && bOutIsContinuous)
+	{
+		SetIsFreehang(bSideIsFreehang);
+	}
+	return bFound;
 }
 
 bool UThreadTalesTraversalComponent::FindLedgeInDirection(EThreadTalesLedgeJumpDirection Direction, EThreadTalesLedgeJumpDistanceType DistanceType, FVector& OutLedgeLoc, FVector& OutWallNormal)
@@ -245,6 +257,7 @@ UAnimMontage* UThreadTalesTraversalComponent::GetJumpMontage(EThreadTalesLedgeJu
 {
 	if (bFreehang && ClimbingConfig)
 	{
+		// 1. Short Distance Freehang (8 directions with diagonal fallback to lateral/vertical)
 		if (DistanceType == EThreadTalesLedgeJumpDistanceType::Short)
 		{
 			switch (Direction)
@@ -252,21 +265,117 @@ UAnimMontage* UThreadTalesTraversalComponent::GetJumpMontage(EThreadTalesLedgeJu
 			case EThreadTalesLedgeJumpDirection::Up:
 				if (ClimbingConfig->BarClimbHopUpMontage) return ClimbingConfig->BarClimbHopUpMontage.Get();
 				break;
+			case EThreadTalesLedgeJumpDirection::UpRight:
+				if (ClimbingConfig->BarClimbJumpUpRightMontage) return ClimbingConfig->BarClimbJumpUpRightMontage.Get();
+				if (ClimbingConfig->BarClimbJumpRightMontage) return ClimbingConfig->BarClimbJumpRightMontage.Get();
+				if (ClimbingConfig->BarClimbHopUpMontage) return ClimbingConfig->BarClimbHopUpMontage.Get();
+				break;
+			case EThreadTalesLedgeJumpDirection::Right:
+				if (ClimbingConfig->BarClimbJumpRightMontage) return ClimbingConfig->BarClimbJumpRightMontage.Get();
+				break;
+			case EThreadTalesLedgeJumpDirection::DownRight:
+				if (ClimbingConfig->BarClimbJumpDownRightMontage) return ClimbingConfig->BarClimbJumpDownRightMontage.Get();
+				if (ClimbingConfig->BarClimbJumpRightMontage) return ClimbingConfig->BarClimbJumpRightMontage.Get();
+				if (ClimbingConfig->BarClimbHopDownMontage) return ClimbingConfig->BarClimbHopDownMontage.Get();
+				break;
 			case EThreadTalesLedgeJumpDirection::Down:
 				if (ClimbingConfig->BarClimbHopDownMontage) return ClimbingConfig->BarClimbHopDownMontage.Get();
 				break;
-			case EThreadTalesLedgeJumpDirection::Left:
 			case EThreadTalesLedgeJumpDirection::DownLeft:
-			case EThreadTalesLedgeJumpDirection::UpLeft:
+				if (ClimbingConfig->BarClimbJumpDownLeftMontage) return ClimbingConfig->BarClimbJumpDownLeftMontage.Get();
+				if (ClimbingConfig->BarClimbJumpLeftMontage) return ClimbingConfig->BarClimbJumpLeftMontage.Get();
+				if (ClimbingConfig->BarClimbHopDownMontage) return ClimbingConfig->BarClimbHopDownMontage.Get();
+				break;
+			case EThreadTalesLedgeJumpDirection::Left:
 				if (ClimbingConfig->BarClimbJumpLeftMontage) return ClimbingConfig->BarClimbJumpLeftMontage.Get();
 				break;
-			case EThreadTalesLedgeJumpDirection::Right:
-			case EThreadTalesLedgeJumpDirection::DownRight:
-			case EThreadTalesLedgeJumpDirection::UpRight:
-				if (ClimbingConfig->BarClimbJumpRightMontage) return ClimbingConfig->BarClimbJumpRightMontage.Get();
+			case EThreadTalesLedgeJumpDirection::UpLeft:
+				if (ClimbingConfig->BarClimbJumpUpLeftMontage) return ClimbingConfig->BarClimbJumpUpLeftMontage.Get();
+				if (ClimbingConfig->BarClimbJumpLeftMontage) return ClimbingConfig->BarClimbJumpLeftMontage.Get();
+				if (ClimbingConfig->BarClimbHopUpMontage) return ClimbingConfig->BarClimbHopUpMontage.Get();
 				break;
 			default:
 				break;
+			}
+		}
+		// 2. Long Distance Freehang (8 directions with fallback to Short Bar or Braced Long)
+		else if (DistanceType == EThreadTalesLedgeJumpDistanceType::Long)
+		{
+			switch (Direction)
+			{
+			case EThreadTalesLedgeJumpDirection::Up:
+				if (ClimbingConfig->BarLongHopUpMontage) return ClimbingConfig->BarLongHopUpMontage.Get();
+				break;
+			case EThreadTalesLedgeJumpDirection::UpRight:
+				if (ClimbingConfig->BarLongJumpUpRightMontage) return ClimbingConfig->BarLongJumpUpRightMontage.Get();
+				break;
+			case EThreadTalesLedgeJumpDirection::Right:
+				if (ClimbingConfig->BarLongJumpRightMontage) return ClimbingConfig->BarLongJumpRightMontage.Get();
+				break;
+			case EThreadTalesLedgeJumpDirection::DownRight:
+				if (ClimbingConfig->BarLongJumpDownRightMontage) return ClimbingConfig->BarLongJumpDownRightMontage.Get();
+				break;
+			case EThreadTalesLedgeJumpDirection::Down:
+				if (ClimbingConfig->BarLongHopDownMontage) return ClimbingConfig->BarLongHopDownMontage.Get();
+				break;
+			case EThreadTalesLedgeJumpDirection::DownLeft:
+				if (ClimbingConfig->BarLongJumpDownLeftMontage) return ClimbingConfig->BarLongJumpDownLeftMontage.Get();
+				break;
+			case EThreadTalesLedgeJumpDirection::Left:
+				if (ClimbingConfig->BarLongJumpLeftMontage) return ClimbingConfig->BarLongJumpLeftMontage.Get();
+				break;
+			case EThreadTalesLedgeJumpDirection::UpLeft:
+				if (ClimbingConfig->BarLongJumpUpLeftMontage) return ClimbingConfig->BarLongJumpUpLeftMontage.Get();
+				break;
+			default:
+				break;
+			}
+
+			// Cascade: If dedicated BarLong montage is not assigned, fall back to Bar Short montage
+			UAnimMontage* BarShortFallback = GetJumpMontage(Direction, EThreadTalesLedgeJumpDistanceType::Short, true);
+			if (BarShortFallback)
+			{
+				return BarShortFallback;
+			}
+		}
+		// 3. Leap Distance Freehang (8 directions with fallback to Long Bar or Short Bar)
+		else if (DistanceType == EThreadTalesLedgeJumpDistanceType::Leap)
+		{
+			switch (Direction)
+			{
+			case EThreadTalesLedgeJumpDirection::Up:
+				if (ClimbingConfig->BarLeapHopUpMontage) return ClimbingConfig->BarLeapHopUpMontage.Get();
+				break;
+			case EThreadTalesLedgeJumpDirection::UpRight:
+				if (ClimbingConfig->BarLeapJumpUpRightMontage) return ClimbingConfig->BarLeapJumpUpRightMontage.Get();
+				break;
+			case EThreadTalesLedgeJumpDirection::Right:
+				if (ClimbingConfig->BarLeapJumpRightMontage) return ClimbingConfig->BarLeapJumpRightMontage.Get();
+				break;
+			case EThreadTalesLedgeJumpDirection::DownRight:
+				if (ClimbingConfig->BarLeapJumpDownRightMontage) return ClimbingConfig->BarLeapJumpDownRightMontage.Get();
+				break;
+			case EThreadTalesLedgeJumpDirection::Down:
+				if (ClimbingConfig->BarLeapHopDownMontage) return ClimbingConfig->BarLeapHopDownMontage.Get();
+				break;
+			case EThreadTalesLedgeJumpDirection::DownLeft:
+				if (ClimbingConfig->BarLeapJumpDownLeftMontage) return ClimbingConfig->BarLeapJumpDownLeftMontage.Get();
+				break;
+			case EThreadTalesLedgeJumpDirection::Left:
+				if (ClimbingConfig->BarLeapJumpLeftMontage) return ClimbingConfig->BarLeapJumpLeftMontage.Get();
+				break;
+			case EThreadTalesLedgeJumpDirection::UpLeft:
+				if (ClimbingConfig->BarLeapJumpUpLeftMontage) return ClimbingConfig->BarLeapJumpUpLeftMontage.Get();
+				break;
+			default:
+				break;
+			}
+
+			// Cascade: If dedicated BarLeap montage is not assigned, fall back to Bar Long or Bar Short montage
+			UAnimMontage* BarLongFallback = GetJumpMontage(Direction, EThreadTalesLedgeJumpDistanceType::Long, true);
+			if (BarLongFallback)
+			{
+				return BarLongFallback;
 			}
 		}
 	}
@@ -499,8 +608,10 @@ void UThreadTalesTraversalComponent::Multicast_HopUp_Implementation(const FVecto
 		return;
 	}
 
-	LedgeHandler.StopAllClimbingMontages(CharacterOwner);
 	SetClimbingSubState(EThreadTalesClimbingSubState::JumpTransition);
+	bIsFreehang = CheckIsFreehangLedge(TargetLedgeLoc, TargetWallNormal);
+	LedgeHandler.SetIsFreehang(bIsFreehang);
+
 	UAnimMontage* Montage = GetJumpMontage(EThreadTalesLedgeJumpDirection::Up, EThreadTalesLedgeJumpDistanceType::Short, bIsFreehang);
 	LedgeHandler.Internal_StartTransition(Montage, TargetLedgeLoc, TargetWallNormal, this, CharacterOwner, -1.0f, EThreadTalesLedgeJumpDistanceType::Short);
 }
@@ -517,8 +628,10 @@ void UThreadTalesTraversalComponent::Multicast_SideJump_Implementation(float Dir
 		return;
 	}
 
-	LedgeHandler.StopAllClimbingMontages(CharacterOwner);
 	SetClimbingSubState(EThreadTalesClimbingSubState::JumpTransition);
+	bIsFreehang = CheckIsFreehangLedge(TargetLedgeLoc, TargetWallNormal);
+	LedgeHandler.SetIsFreehang(bIsFreehang);
+
 	const EThreadTalesLedgeJumpDirection Dir = (DirectionSign < 0.0f) ? EThreadTalesLedgeJumpDirection::Left : EThreadTalesLedgeJumpDirection::Right;
 	UAnimMontage* Montage = GetJumpMontage(Dir, EThreadTalesLedgeJumpDistanceType::Short, bIsFreehang);
 	LedgeHandler.Internal_StartTransition(Montage, TargetLedgeLoc, TargetWallNormal, this, CharacterOwner, -1.0f, EThreadTalesLedgeJumpDistanceType::Short);
@@ -536,8 +649,11 @@ void UThreadTalesTraversalComponent::Multicast_LedgeJump_Implementation(EThreadT
 		return;
 	}
 
-	LedgeHandler.StopAllClimbingMontages(CharacterOwner);
 	SetClimbingSubState(EThreadTalesClimbingSubState::JumpTransition);
+
+	bIsFreehang = CheckIsFreehangLedge(TargetLedgeLoc, TargetWallNormal);
+	LedgeHandler.SetIsFreehang(bIsFreehang);
+
 	UAnimMontage* Montage = (Direction == EThreadTalesLedgeJumpDirection::Down && DistanceType == EThreadTalesLedgeJumpDistanceType::Leap && GetActiveBackJumpMontage(bIsFreehang))
 		? GetActiveBackJumpMontage(bIsFreehang)
 		: GetJumpMontage(Direction, DistanceType, bIsFreehang);
@@ -556,8 +672,11 @@ void UThreadTalesTraversalComponent::Multicast_StartShimmy_Implementation(float 
 		return;
 	}
 
-	LedgeHandler.StopAllClimbingMontages(CharacterOwner);
 	SetClimbingSubState(EThreadTalesClimbingSubState::Shimmying);
+
+	bIsFreehang = CheckIsFreehangLedge(TargetLedgeLoc, TargetWallNormal);
+	LedgeHandler.SetIsFreehang(bIsFreehang);
+
 	UAnimMontage* Montage = GetActiveShimmyMontage(DirectionSign < 0.0f, bIsFreehang);
 	LedgeHandler.Internal_StartTransition(Montage, TargetLedgeLoc, TargetWallNormal, this, CharacterOwner);
 }
@@ -576,7 +695,6 @@ void UThreadTalesTraversalComponent::Multicast_PlayClimbMontage_Implementation(U
 	}
 
 	SetClimbingSubState(EThreadTalesClimbingSubState::MantleUp);
-	LedgeHandler.StopAllClimbingMontages(CharacterOwner);
 
 	if (UCharacterMovementComponent* MoveComp = CharacterOwner->GetCharacterMovement())
 	{

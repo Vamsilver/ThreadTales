@@ -246,9 +246,9 @@ FVector FThreadTalesTraversalInputHelper::GetClimbingIntentWorldVector(
 	// Vertical component: Y is Forward/Up (+1) / Backward/Down (-1)
 	const FVector VerticalComponent = Up * Input2D.Y;
 
-	// If player is pulling backward (Y < -0.1f) and bBackJumpIntent is active or Back key held,
+	// If player is pulling backward (Y < -0.1f) and bBackJumpIntent is explicitly active,
 	// blend outward away from wall along SafeWallNormal into open 3D space
-	if (Input2D.Y < -0.1f && (bBackJumpIntent || IsBackInputHeld(PC)))
+	if (Input2D.Y < -0.1f && bBackJumpIntent)
 	{
 		const float BackAmount = FMath::Abs(Input2D.Y);
 		const FVector OutwardComponent = SafeWallNormal * BackAmount;
