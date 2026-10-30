@@ -1,4 +1,4 @@
-# Unreal Engine temp and build directories
+# Build & temp
 Binaries/
 DerivedDataCache/
 Intermediate/
@@ -7,41 +7,26 @@ Build/
 **/Intermediate/
 **/Binaries/
 
-# Visual Studio files
+# IDE
 .vs/
 *.sln
 *.suo
-*.opensdf
-*.sdf
-*.VC.db
-*.VC.opendb
-
-# IDE configs (Rider / VS Code)
 .idea/
 .vscode/
 
-# Package builds
-/Builds/
-
-# Local configuration files
+# Local configs
 Windows/
 Config/BroadcastDeviceProviderRegistry.json
-
-# Agent Rules & Local configs
 AGENTS.md
 GEMINI.md
 .agents/
-
-# Graphify Knowledge Graph
 graphify-out/
-
-# AI internal operational context
 .context/
+scripts/
 __pycache__/
 *.pyc
-scripts/
 
-# Binary UE Assets ? excluded from GitHub source repository
+# Binary UE Assets — excluded from GitHub source repository
 Content/
 Plugins/*/Content/
 SourceArt/
