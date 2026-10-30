@@ -1,0 +1,9 @@
+* text=auto
+*.cpp text eol=crlf
+*.h text eol=crlf
+*.cs text eol=crlf
+*.ini text eol=crlf
+*.uproject text
+*.uplugin text
+*.md text
+*.bat text eol=crlf
