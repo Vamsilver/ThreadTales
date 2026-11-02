@@ -28,10 +28,15 @@ public class ThreadTales : ModuleRules
 			"Chooser",
 			"StructUtils",
 			"MotionWarping",
-			"NavigationSystem"
+			"NavigationSystem",
+			"OnlineSubsystem",
+			"OnlineSubsystemUtils",
+			"SteamSockets",
+			"EngineSettings"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] { });
+		AddEngineThirdPartyPrivateStaticDependencies(Target, "Steamworks");
 
 		if (Target.bBuildEditor)
 		{

@@ -481,6 +481,14 @@ void AThreadTalesCharacter::PossessedBy(AController* NewController)
 {
 	Super::PossessedBy(NewController);
 	FThreadTalesOverlayDebug::RefreshWeaponMappingContext(this);
+
+	APlayerController* PC = Cast<APlayerController>(NewController);
+	if (PC && PC->IsLocalPlayerController())
+	{
+		FInputModeGameOnly InputMode;
+		PC->SetInputMode(InputMode);
+		PC->SetShowMouseCursor(false);
+	}
 }
 
 void AThreadTalesCharacter::OnRep_Controller()

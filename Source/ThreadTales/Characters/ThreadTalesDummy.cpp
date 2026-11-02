@@ -178,7 +178,9 @@ void AThreadTalesDummy::InitializeHitboxAndVisualIndicators()
 	StateTreeComponent->SetStartLogicAutomatically(false);
 
 	static ConstructorHelpers::FObjectFinder<UStateTree> StateTreeObj(TEXT("/Game/AI/StateTree/ST_Dummy_Combat.ST_Dummy_Combat"));
-	if (StateTreeObj.Succeeded())
+	// Loading the tree can re-enter this constructor through its context actor class.
+	// Do not validate a partially loaded tree; BeginPlay assigns it again after loading.
+	if (StateTreeObj.Succeeded() && StateTreeObj.Object->IsReadyToRun())
 	{
 		StateTreeComponent->SetStateTree(StateTreeObj.Object);
 	}
@@ -231,13 +233,13 @@ void AThreadTalesDummy::BeginPlay()
 		if (StateTreeComponent)
 		{
 			bStateTreeEnteredFirstState = false;
-#if WITH_EDITOR
 			if (UStateTree* TreeAsset = Cast<UStateTree>(StaticLoadObject(UStateTree::StaticClass(), nullptr, TEXT("/Game/AI/StateTree/ST_Dummy_Combat.ST_Dummy_Combat"))))
 			{
+#if WITH_EDITOR
 				UThreadTalesStateTreeHelper::BuildAndCompileDummyStateTree(TreeAsset);
+#endif
 				StateTreeComponent->SetStateTree(TreeAsset);
 			}
-#endif
 			StateTreeComponent->SetComponentTickEnabled(true);
 			StateTreeComponent->Activate(true);
 			StateTreeComponent->StartLogic();
