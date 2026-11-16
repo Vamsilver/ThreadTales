@@ -54,7 +54,8 @@ public class ThreadTales : ModuleRules
 			"ThreadTales/Abilities",
 			"ThreadTales/Animation",
 			"ThreadTales/Input",
-			"ThreadTales/UI"
+			"ThreadTales/UI",
+			"ThreadTales/Lobby"
 		});
 	}
 }

@@ -45,6 +45,14 @@ public:
 	UFUNCTION(BlueprintPure, Category = "ThreadTales|Spawn")
 	bool IsSpawnPointActive() const { return bIsActive; }
 
+	/** Returns true if marked as initial spawn point */
+	UFUNCTION(BlueprintPure, Category = "ThreadTales|Spawn")
+	bool IsInitialSpawnPoint() const { return bIsInitialSpawnPoint; }
+
+	/** If true, this spawn point is marked as the initial spawn point to be activated on level start */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ThreadTales|Spawn")
+	bool bIsInitialSpawnPoint = false;
+
 	/** Broadcast when the active state changes */
 	UPROPERTY(BlueprintAssignable, Category = "ThreadTales|Spawn")
 	FOnSpawnPointStateChangedDelegate OnSpawnPointStateChanged;
@@ -55,12 +63,18 @@ protected:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	/** Visual event called when the bonfire is ignited/activated */
-	UFUNCTION(BlueprintImplementableEvent, Category = "ThreadTales|Spawn")
+	UFUNCTION(BlueprintNativeEvent, Category = "ThreadTales|Spawn")
 	void OnSpawnPointActivated();
+	virtual void OnSpawnPointActivated_Implementation();
 
 	/** Visual event called when the bonfire is extinguished/deactivated */
-	UFUNCTION(BlueprintImplementableEvent, Category = "ThreadTales|Spawn")
+	UFUNCTION(BlueprintNativeEvent, Category = "ThreadTales|Spawn")
 	void OnSpawnPointDeactivated();
+	virtual void OnSpawnPointDeactivated_Implementation();
+
+	/** Applies activation visual state (particles and lights) */
+	UFUNCTION(BlueprintCallable, Category = "ThreadTales|Spawn")
+	virtual void ApplyVisualState(bool bActive);
 
 	UFUNCTION()
 	void OnRep_IsActive();

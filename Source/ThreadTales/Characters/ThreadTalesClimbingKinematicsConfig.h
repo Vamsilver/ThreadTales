@@ -67,7 +67,7 @@ struct THREADTALES_API FThreadTalesClimbingKinematicsTimings
 		, ShortJumpDuration(0.95f)
 		, LongJumpDuration(1.00f)
 		, LeapJumpDuration(1.00f)
-		, JumpFlightEndRatio(0.66f)
+		, JumpFlightEndRatio(0.82f)
 		, ShortHandDetachTime(0.20f)
 		, LongHandDetachTime(0.20f)
 		, LeapHandDetachTime(0.20f)

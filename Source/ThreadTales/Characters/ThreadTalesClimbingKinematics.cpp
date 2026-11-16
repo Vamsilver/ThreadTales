@@ -28,8 +28,8 @@ void FThreadTalesJumpConfigTable::Build(const UThreadTalesClimbingConfig* Config
 		}
 	}
 
-	const float EffMinHopUp = Config ? Config->Kinematics.Bounds.Short.MinHopUpHeight : 25.0f;
-	const float EffMaxHopUp = Config ? Config->Kinematics.Bounds.Short.MaxHopUpHeight : 60.0f;
+	const float EffMinHopUp = Config ? Config->Kinematics.Bounds.Short.MinHopUpHeight : 20.0f;
+	const float EffMaxHopUp = Config ? Config->Kinematics.Bounds.Short.MaxHopUpHeight : 85.0f;
 	const float EffMinSide = Config ? Config->Kinematics.Bounds.Short.MinSideJumpDistance : 25.0f;
 	const float EffMaxSide = Config ? Config->Kinematics.Bounds.Short.MaxSideJumpDistance : 60.0f;
 	const float EffMinDiag = Config ? Config->Kinematics.Bounds.Short.MinDiagonalJumpDistance : 25.0f;
@@ -37,7 +37,7 @@ void FThreadTalesJumpConfigTable::Build(const UThreadTalesClimbingConfig* Config
 	const float EffMinHopDown = Config ? Config->Kinematics.Bounds.Short.MinHopDownHeight : 20.0f;
 	const float EffMaxHopDown = Config ? Config->Kinematics.Bounds.Short.MaxHopDownHeight : 55.0f;
 
-	const float EffMinLongHopUp = Config ? Config->Kinematics.Bounds.Long.MinLongHopUpHeight : 50.0f;
+	const float EffMinLongHopUp = Config ? Config->Kinematics.Bounds.Long.MinLongHopUpHeight : 80.0f;
 	const float EffMaxLongHopUp = Config ? Config->Kinematics.Bounds.Long.MaxLongHopUpHeight : 120.0f;
 	const float EffMinLongSide = Config ? Config->Kinematics.Bounds.Long.MinLongSideJumpDistance : 50.0f;
 	const float EffMaxLongSide = Config ? Config->Kinematics.Bounds.Long.MaxLongSideJumpDistance : 120.0f;
@@ -247,16 +247,14 @@ void FThreadTalesJumpConfigTable::GetKinematicPhases(
 		OutFlightEnd = 0.45f;
 		break;
 	case EThreadTalesLedgeJumpDistanceType::Long:
-		// Long animations (0.98s clip): root translation from 0.18 to 0.66, target hold reached at ~0.65s (66% of clip)
-		OutAnticipationEnd = 0.18f;
-		OutFlightEnd = 0.66f;
-		break;
 	case EThreadTalesLedgeJumpDistanceType::Short:
 	default:
-		// Short animations (0.98s clip): root translation from 0.18 to 0.66, target hold reached at ~0.65s (66% of clip)
-		OutAnticipationEnd = 0.18f;
-		OutFlightEnd = 0.66f;
+	{
+		const float CfgFlightEnd = Config ? Config->Kinematics.Timings.JumpFlightEndRatio : 0.82f;
+		OutAnticipationEnd = 0.20f;
+		OutFlightEnd = (CfgFlightEnd >= 0.70f) ? CfgFlightEnd : 0.82f;
 		break;
+	}
 	}
 
 	OutAnticipationEnd = FMath::Clamp(OutAnticipationEnd, 0.05f, 0.35f);

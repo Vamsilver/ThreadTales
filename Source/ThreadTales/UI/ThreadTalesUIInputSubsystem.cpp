@@ -44,6 +44,11 @@ void UThreadTalesUIInputSubsystem::PushContext(TScriptInterface<IThreadTalesUICo
 		return;
 	}
 
+	if (ContextStack.Num() > 0 && ContextStack.Last() == Context)
+	{
+		return;
+	}
+
 	ContextStack.Remove(Context);
 
 	if (ContextStack.Num() > 0)

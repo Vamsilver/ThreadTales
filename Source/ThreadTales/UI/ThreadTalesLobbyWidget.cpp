@@ -36,9 +36,11 @@ void UThreadTalesLobbyWidget::NativeConstruct()
 
 	if (UGameInstance* GI = GetGameInstance())
 	{
-		if (UThreadTalesUIInputSubsystem* UIInputSubsystem = GI->GetSubsystem<UThreadTalesUIInputSubsystem>())
+		// Only auto-activate context and local co-op when opened as standalone root widget (not an embedded page in WBP_MainMenu)
+		if (!GetParent())
 		{
-			UIInputSubsystem->PushContext(this);
+			if (UThreadTalesUIInputSubsystem* UIInputSubsystem = GI->GetSubsystem<UThreadTalesUIInputSubsystem>()) UIInputSubsystem->PushContext(this);
+			if (UThreadTalesSessionSubsystem* SessionSubsystem = GI->GetSubsystem<UThreadTalesSessionSubsystem>()) SessionSubsystem->EnsureLocalCoopLobby(GetWorld());
 		}
 	}
 
@@ -59,16 +61,22 @@ void UThreadTalesLobbyWidget::NativeConstruct()
 
 	VirtualCursor.Init(WidgetTree, VirtualCursor_P2);
 
-	UWorld* World = GetWorld();
-	if (World)
+	if (!GetParent())
 	{
-		if (AThreadTalesLobbyGameMode* GM = Cast<AThreadTalesLobbyGameMode>(UGameplayStatics::GetGameMode(World)))
+		UWorld* World = GetWorld();
+		if (World)
 		{
-			GM->OnLobbyUpdated.AddDynamic(this, &UThreadTalesLobbyWidget::HandleGameModeLobbyUpdated);
+			if (AThreadTalesLobbyGameMode* GM = Cast<AThreadTalesLobbyGameMode>(UGameplayStatics::GetGameMode(World)))
+			{
+				GM->OnLobbyUpdated.AddDynamic(this, &UThreadTalesLobbyWidget::HandleGameModeLobbyUpdated);
+			}
+			World->GetTimerManager().SetTimerForNextTick(FTimerDelegate::CreateUObject(this, &UThreadTalesLobbyWidget::FocusDefaultButton));
 		}
-		World->GetTimerManager().SetTimerForNextTick(FTimerDelegate::CreateUObject(this, &UThreadTalesLobbyWidget::FocusDefaultButton));
+		else
+		{
+			FocusDefaultButton();
+		}
 	}
-	else FocusDefaultButton();
 
 	ForceRefreshLobbyState();
 }
@@ -80,6 +88,13 @@ void UThreadTalesLobbyWidget::SetGlobalUserFocus(UWidget* TargetWidget)
 
 void UThreadTalesLobbyWidget::FocusDefaultButton()
 {
+	static bool bInFocusDefaultButton = false;
+	if (bInFocusDefaultButton)
+	{
+		return;
+	}
+	TGuardValue<bool> FocusGuard(bInFocusDefaultButton, true);
+
 	UWorld* World = GetWorld();
 	APlayerController* PC0 = World ? UGameplayStatics::GetPlayerController(World, 0) : GetOwningPlayer();
 	APlayerController* PC1 = World ? UGameplayStatics::GetPlayerController(World, 1) : nullptr;
@@ -268,6 +283,15 @@ void UThreadTalesLobbyWidget::SelectRoleForPlayer(int32 PlayerIndex, EThreadTale
 		}
 	}
 
+	// Persist role selection to SessionSubsystem across level travel and PIE hard travel
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (UThreadTalesSessionSubsystem* SessionSubsystem = GI->GetSubsystem<UThreadTalesSessionSubsystem>())
+		{
+			SessionSubsystem->SyncLobbyRoleSelection(PlayerIndex, NewRole, IsLocalCoopMatch());
+		}
+	}
+
 	ForceRefreshLobbyState();
 }
 
@@ -382,6 +406,19 @@ void UThreadTalesLobbyWidget::RequestStartMatch()
 				FInputModeGameOnly InputMode;
 				PC->SetInputMode(InputMode);
 				PC->SetShowMouseCursor(false);
+			}
+		}
+
+		// Ensure both local player roles are committed to SessionSubsystem prior to travel
+		if (UGameInstance* GI = GetGameInstance())
+		{
+			if (UThreadTalesSessionSubsystem* SessionSubsystem = GI->GetSubsystem<UThreadTalesSessionSubsystem>())
+			{
+				SessionSubsystem->SetLocalPlayerRole(0, GetPlayerRole(0));
+				if (IsLocalCoopMatch())
+				{
+					SessionSubsystem->SetLocalPlayerRole(1, GetPlayerRole(1));
+				}
 			}
 		}
 

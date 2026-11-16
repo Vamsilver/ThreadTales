@@ -142,9 +142,9 @@ bool FThreadTalesLedgeDetector::FindLedgeVertical(
 		TArray<float> Heights;
 		switch (DistanceType)
 		{
-		case EThreadTalesLedgeJumpDistanceType::Short: Heights = { 30.0f, 42.0f, 55.0f }; break;
-		case EThreadTalesLedgeJumpDistanceType::Long:  Heights = { 55.0f, 75.0f, 95.0f, 110.0f }; break;
-		case EThreadTalesLedgeJumpDistanceType::Leap:  Heights = { 105.0f, 130.0f, 160.0f, 190.0f }; break;
+		case EThreadTalesLedgeJumpDistanceType::Short: Heights = { 30.0f, 45.0f, 60.0f, 75.0f, 85.0f }; break;
+		case EThreadTalesLedgeJumpDistanceType::Long:  Heights = { 80.0f, 95.0f, 110.0f, 120.0f }; break;
+		case EThreadTalesLedgeJumpDistanceType::Leap:  Heights = { 110.0f, 135.0f, 165.0f, 195.0f }; break;
 		}
 
 		for (float H : Heights)

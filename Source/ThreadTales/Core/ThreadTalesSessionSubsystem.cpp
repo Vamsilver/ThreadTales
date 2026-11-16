@@ -36,6 +36,7 @@ void UThreadTalesSessionSubsystem::Initialize(FSubsystemCollectionBase& Collecti
 	// Ensure default solo input routing: Gamepad 0 assigned to Player 0
 	SetLocalCoopDeviceRouting(false);
 	ReleaseSteamInputHooks();
+	SavedLocalPlayerRoles.Empty();
 
 	IOnlineSubsystem* OnlineSubsystem = IOnlineSubsystem::Get();
 	if (!OnlineSubsystem)
@@ -60,6 +61,7 @@ void UThreadTalesSessionSubsystem::Initialize(FSubsystemCollectionBase& Collecti
 
 void UThreadTalesSessionSubsystem::Deinitialize()
 {
+	SavedLocalPlayerRoles.Empty();
 	SetLocalCoopDeviceRouting(false);
 	IOnlineSubsystem* OnlineSubsystem = IOnlineSubsystem::Get();
 	if (OnlineSubsystem)
@@ -513,5 +515,68 @@ void UThreadTalesSessionSubsystem::SetLocalCoopDeviceRouting(bool bEnableOffset)
 			MapsSettings->SetSkipAssigningGamepadToPlayer1(false);
 		}
 		MapsSettings->bOffsetPlayerGamepadIds = bEnableOffset;
+	}
+}
+
+void UThreadTalesSessionSubsystem::SetLocalPlayerRole(int32 PlayerIndex, EThreadTalesCharacterRole InRole)
+{
+	if (PlayerIndex < 0)
+	{
+		return;
+	}
+
+	SavedLocalPlayerRoles.FindOrAdd(PlayerIndex) = InRole;
+	UE_LOG(LogTemp, Log, TEXT("[ThreadTalesSessionSubsystem] Stored role %d for PlayerIndex %d"), static_cast<int32>(InRole), PlayerIndex);
+}
+
+EThreadTalesCharacterRole UThreadTalesSessionSubsystem::GetLocalPlayerRole(int32 PlayerIndex) const
+{
+	if (PlayerIndex < 0)
+	{
+		return EThreadTalesCharacterRole::None;
+	}
+
+	if (const EThreadTalesCharacterRole* FoundRole = SavedLocalPlayerRoles.Find(PlayerIndex))
+	{
+		return *FoundRole;
+	}
+
+	return EThreadTalesCharacterRole::None;
+}
+
+void UThreadTalesSessionSubsystem::ClearLocalPlayerRoles()
+{
+	SavedLocalPlayerRoles.Empty();
+	UE_LOG(LogTemp, Log, TEXT("[ThreadTalesSessionSubsystem] Cleared all stored local player roles"));
+}
+
+void UThreadTalesSessionSubsystem::EnsureLocalCoopLobby(UWorld* World)
+{
+	const int32 NumPCs = World ? World->GetNumPlayerControllers() : 1;
+	if (NumPCs <= 1 && !IsOnlineSessionActive() && !IsLocalCoopActive())
+	{
+		StartLocalCoop();
+	}
+}
+
+void UThreadTalesSessionSubsystem::SyncLobbyRoleSelection(int32 PlayerIndex, EThreadTalesCharacterRole InRole, bool bIsLocalCoop)
+{
+	SetLocalPlayerRole(PlayerIndex, InRole);
+	if (bIsLocalCoop && InRole != EThreadTalesCharacterRole::None)
+	{
+		const int32 OtherIndex = (PlayerIndex == 0) ? 1 : 0;
+		if (GetLocalPlayerRole(OtherIndex) == InRole)
+		{
+			SetLocalPlayerRole(OtherIndex, EThreadTalesCharacterRole::None);
+		}
+	}
+}
+
+void UThreadTalesSessionSubsystem::CommitLobbyRoles(EThreadTalesCharacterRole Role1, EThreadTalesCharacterRole Role2, bool bIsLocalCoop)
+{
+	SetLocalPlayerRole(0, Role1);
+	if (bIsLocalCoop)
+	{
+		SetLocalPlayerRole(1, Role2);
 	}
 }

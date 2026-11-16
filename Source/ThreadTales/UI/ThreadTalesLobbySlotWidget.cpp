@@ -4,6 +4,8 @@
 #include "ThreadTalesButton.h"
 #include "Components/Button.h"
 #include "Components/TextBlock.h"
+#include "Components/Image.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "Blueprint/WidgetTree.h"
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/GameStateBase.h"
@@ -150,6 +152,26 @@ void UThreadTalesLobbySlotWidget::InitializeSlot(int32 InSlotIndex)
 		bIsGamepadActive = true;
 	}
 
+	if (!CharacterPreviewImage && WidgetTree)
+	{
+		for (const TCHAR* Candidate : { TEXT("CharacterPreviewImage"), TEXT("PreviewImage"), TEXT("Img_Preview"), TEXT("CharacterImage"), TEXT("HeroImage"), TEXT("Image_Hero"), TEXT("Image_Character") })
+		{
+			if ((CharacterPreviewImage = WidgetTree->FindWidget<UImage>(FName(Candidate))))
+			{
+				break;
+			}
+		}
+	}
+
+	const TCHAR* RTPath = (PlayerSlotIndex == 0)
+		? TEXT("/Game/UI/RT_LobbyPodium_P1.RT_LobbyPodium_P1")
+		: TEXT("/Game/UI/RT_LobbyPodium_P2.RT_LobbyPodium_P2");
+
+	if (UTexture* RT = Cast<UTexture>(StaticLoadObject(UTexture::StaticClass(), nullptr, RTPath)))
+	{
+		SetPreviewTexture(RT);
+	}
+
 	if (GetAssignedRole() == EThreadTalesCharacterRole::None)
 	{
 		const EThreadTalesCharacterRole DefaultRole = (PlayerSlotIndex == 0)
@@ -159,6 +181,52 @@ void UThreadTalesLobbySlotWidget::InitializeSlot(int32 InSlotIndex)
 	}
 
 	RefreshSlotState();
+}
+
+void UThreadTalesLobbySlotWidget::SetPreviewTexture(UTexture* InTexture)
+{
+	if (!CharacterPreviewImage && WidgetTree)
+	{
+		for (const TCHAR* Candidate : { TEXT("CharacterPreviewImage"), TEXT("PreviewImage"), TEXT("Img_Preview"), TEXT("CharacterImage"), TEXT("HeroImage"), TEXT("Image_Hero"), TEXT("Image_Character") })
+		{
+			if ((CharacterPreviewImage = WidgetTree->FindWidget<UImage>(FName(Candidate))))
+			{
+				break;
+			}
+		}
+	}
+
+	if (!CharacterPreviewImage || !InTexture)
+	{
+		return;
+	}
+
+	UMaterialInterface* CurrentBrushObj = Cast<UMaterialInterface>(CharacterPreviewImage->GetBrush().GetResourceObject());
+	UMaterialInstanceDynamic* MID = Cast<UMaterialInstanceDynamic>(CurrentBrushObj);
+
+	if (!MID)
+	{
+		UMaterialInterface* ParentMat = CurrentBrushObj;
+		if (!ParentMat)
+		{
+			ParentMat = Cast<UMaterialInterface>(StaticLoadObject(UMaterialInterface::StaticClass(), nullptr, TEXT("/Game/UI/M_CharacterPreview_UI.M_CharacterPreview_UI")));
+		}
+
+		if (ParentMat)
+		{
+			MID = UMaterialInstanceDynamic::Create(ParentMat, this);
+			CharacterPreviewImage->SetBrushResourceObject(MID);
+		}
+	}
+
+	if (MID)
+	{
+		MID->SetTextureParameterValue(FName("PreviewTexture"), InTexture);
+	}
+	else
+	{
+		CharacterPreviewImage->SetBrushResourceObject(InTexture);
+	}
 }
 
 void UThreadTalesLobbySlotWidget::SelectRole(EThreadTalesCharacterRole NewRole)

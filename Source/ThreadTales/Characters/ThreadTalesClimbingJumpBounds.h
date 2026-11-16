@@ -15,7 +15,7 @@ struct THREADTALES_API FThreadTalesClimbingShortBounds
 
 	FThreadTalesClimbingShortBounds()
 		: MinHopUpHeight(20.0f)
-		, MaxHopUpHeight(58.0f)
+		, MaxHopUpHeight(85.0f)
 		, MinSideJumpDistance(25.0f)
 		, MaxSideJumpDistance(58.0f)
 		, MinDiagonalJumpDistance(25.0f)
@@ -59,8 +59,8 @@ struct THREADTALES_API FThreadTalesClimbingLongBounds
 	GENERATED_BODY()
 
 	FThreadTalesClimbingLongBounds()
-		: MinLongHopUpHeight(50.0f)
-		, MaxLongHopUpHeight(110.0f)
+		: MinLongHopUpHeight(80.0f)
+		, MaxLongHopUpHeight(120.0f)
 		, MinLongSideJumpDistance(50.0f)
 		, MaxLongSideJumpDistance(110.0f)
 		, MinLongDiagonalJumpDistance(50.0f)

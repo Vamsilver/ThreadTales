@@ -20,8 +20,13 @@ class THREADTALES_API AThreadTalesLobbyGameMode : public AGameModeBase
 public:
 	AThreadTalesLobbyGameMode();
 
+	virtual void BeginPlay() override;
 	virtual void PostLogin(APlayerController* NewPlayer) override;
 	virtual void Logout(AController* Exiting) override;
+
+	/** Directs player camera to the lobby camera actor */
+	UFUNCTION(BlueprintCallable, Category = "ThreadTales|Lobby")
+	void SetupLobbyViewTarget(APlayerController* PC);
 
 	/** Called by the Host to travel to the gameplay map when all conditions are satisfied */
 	UFUNCTION(BlueprintCallable, Category = "ThreadTales|Lobby")

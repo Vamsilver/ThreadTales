@@ -6,6 +6,7 @@
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "Interfaces/OnlineSessionInterface.h"
 #include "OnlineSessionSettings.h"
+#include "ThreadTalesPlayerState.h"
 #include "ThreadTalesSessionSubsystem.generated.h"
 
 /**
@@ -108,6 +109,34 @@ public:
 	void SetLocalCoopDeviceRouting(bool bEnableOffset);
 
 	// ==========================================
+	// Role Persistence API (Across Travel & PIE)
+	// ==========================================
+
+	/** Sets the selected role for a given local player slot (0 = P1, 1 = P2) */
+	UFUNCTION(BlueprintCallable, Category = "ThreadTales|Session")
+	void SetLocalPlayerRole(int32 PlayerIndex, EThreadTalesCharacterRole InRole);
+
+	/** Gets the selected role for a given local player slot (returns None if unassigned) */
+	UFUNCTION(BlueprintPure, Category = "ThreadTales|Session")
+	EThreadTalesCharacterRole GetLocalPlayerRole(int32 PlayerIndex) const;
+
+	/** Clears all stored local player roles */
+	UFUNCTION(BlueprintCallable, Category = "ThreadTales|Session")
+	void ClearLocalPlayerRoles();
+
+	/** Ensures second local player is active for couch co-op if entering lobby alone */
+	UFUNCTION(BlueprintCallable, Category = "ThreadTales|Session")
+	void EnsureLocalCoopLobby(UWorld* World);
+
+	/** Synchronizes role selection during lobby configuration with mutual exclusion */
+	UFUNCTION(BlueprintCallable, Category = "ThreadTales|Session")
+	void SyncLobbyRoleSelection(int32 PlayerIndex, EThreadTalesCharacterRole InRole, bool bIsLocalCoop);
+
+	/** Commits final chosen roles for both slots before travel */
+	UFUNCTION(BlueprintCallable, Category = "ThreadTales|Session")
+	void CommitLobbyRoles(EThreadTalesCharacterRole Role1, EThreadTalesCharacterRole Role2, bool bIsLocalCoop);
+
+	// ==========================================
 	// Blueprint Event Dispatchers
 	// ==========================================
 
@@ -125,6 +154,11 @@ public:
 
 	UPROPERTY(BlueprintAssignable, Category = "ThreadTales|LocalCoop|Events")
 	FOnThreadTalesLocalCoopStateChanged OnLocalCoopStateChanged;
+
+protected:
+	/** Stored roles for local players surviving across level transitions and PIE hard travel */
+	UPROPERTY()
+	TMap<int32, EThreadTalesCharacterRole> SavedLocalPlayerRoles;
 
 private:
 	// Internal Delegate Callbacks

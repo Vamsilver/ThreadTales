@@ -5,9 +5,13 @@
 #include "Components/StaticMeshComponent.h"
 #include "Components/ArrowComponent.h"
 #include "Components/SphereComponent.h"
+#include "Components/LightComponentBase.h"
+#include "Particles/ParticleSystemComponent.h"
+#include "NiagaraComponent.h"
 #include "AbilitySystemComponent.h"
 #include "Characters/ThreadTalesCharacter.h"
 #include "Core/ThreadTalesPlayerController.h"
+#include "Core/ThreadTalesGameMode.h"
 #include "Net/UnrealNetwork.h"
 #include "ThreadTales.h"
 
@@ -38,6 +42,9 @@ AThreadTalesSpawnPoint::AThreadTalesSpawnPoint()
 void AThreadTalesSpawnPoint::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// Enforce initial visual state matching bIsActive
+	ApplyVisualState(bIsActive);
 
 	if (HasAuthority() && ProximitySphere)
 	{
@@ -80,7 +87,7 @@ FTransform AThreadTalesSpawnPoint::GetSpawnTransform() const
 {
 	FTransform Transform = SpawnMarker ? SpawnMarker->GetComponentTransform() : GetActorTransform();
 
-	// Lift by standard capsule half-height (~95 units) so the character spawns standing on ground, not embedded into it
+	// Lift by standard capsule half-height (~95 units) so character spawns standing on ground, not embedded
 	Transform.AddToTranslation(FVector(0.0f, 0.0f, 95.0f));
 
 	// Strictly zero out pitch and roll so character orientation is completely upright
@@ -98,7 +105,116 @@ void AThreadTalesSpawnPoint::SetSpawnPointActive(bool bNewActive)
 	}
 
 	bIsActive = bNewActive;
+
+	// If deactivating, immediately remove health regen effect from all overlapping characters
+	if (!bIsActive)
+	{
+		for (auto& Pair : ActiveRegenEffects)
+		{
+			if (AThreadTalesCharacter* Character = Pair.Key.Get())
+			{
+				if (UAbilitySystemComponent* ASC = Character->GetAbilitySystemComponent())
+				{
+					if (Pair.Value.IsValid())
+					{
+						ASC->RemoveActiveGameplayEffect(Pair.Value);
+					}
+				}
+			}
+		}
+		ActiveRegenEffects.Empty();
+	}
+	else
+	{
+		// If activating, apply health regen effect to any characters currently inside radius
+		if (HealthRegenEffectClass && ProximitySphere)
+		{
+			TArray<AActor*> OverlappingActors;
+			ProximitySphere->GetOverlappingActors(OverlappingActors, AThreadTalesCharacter::StaticClass());
+			for (AActor* Actor : OverlappingActors)
+			{
+				if (AThreadTalesCharacter* Char = Cast<AThreadTalesCharacter>(Actor))
+				{
+					if (!ActiveRegenEffects.Contains(Char))
+					{
+						if (UAbilitySystemComponent* ASC = Char->GetAbilitySystemComponent())
+						{
+							FGameplayEffectContextHandle Context = ASC->MakeEffectContext();
+							Context.AddSourceObject(this);
+							FGameplayEffectSpecHandle SpecHandle = ASC->MakeOutgoingSpec(HealthRegenEffectClass, 1.0f, Context);
+							if (SpecHandle.IsValid())
+							{
+								FActiveGameplayEffectHandle ActiveHandle = ASC->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data.Get());
+								ActiveRegenEffects.Add(Char, ActiveHandle);
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
 	OnRep_IsActive();
+}
+
+void AThreadTalesSpawnPoint::ApplyVisualState(bool bActive)
+{
+	// Manage Cascade Particle System Components
+	TArray<UParticleSystemComponent*> Particles;
+	GetComponents<UParticleSystemComponent>(Particles);
+	for (UParticleSystemComponent* PSC : Particles)
+	{
+		if (PSC)
+		{
+			if (bActive)
+			{
+				PSC->Activate(true);
+			}
+			else
+			{
+				PSC->Deactivate();
+			}
+		}
+	}
+
+	// Manage Niagara Particle Components
+	TArray<UNiagaraComponent*> Niagaras;
+	GetComponents<UNiagaraComponent>(Niagaras);
+	for (UNiagaraComponent* NC : Niagaras)
+	{
+		if (NC)
+		{
+			if (bActive)
+			{
+				NC->Activate(true);
+			}
+			else
+			{
+				NC->Deactivate();
+			}
+		}
+	}
+
+	// Manage PointLight / SpotLight / DirectionalLight Components
+	TArray<ULightComponentBase*> Lights;
+	GetComponents<ULightComponentBase>(Lights);
+	for (ULightComponentBase* Light : Lights)
+	{
+		if (Light)
+		{
+			Light->SetVisibility(bActive);
+		}
+	}
+}
+
+void AThreadTalesSpawnPoint::OnSpawnPointActivated_Implementation()
+{
+	ApplyVisualState(true);
+}
+
+void AThreadTalesSpawnPoint::OnSpawnPointDeactivated_Implementation()
+{
+	ApplyVisualState(false);
 }
 
 void AThreadTalesSpawnPoint::OnRep_IsActive()
@@ -128,30 +244,45 @@ void AThreadTalesSpawnPoint::HandleSphereBeginOverlap(UPrimitiveComponent* Overl
 		return;
 	}
 
-	// Activate spawn point if first visit
-	if (!bIsActive)
+	// Route activation through GameMode for centralized team checkpoint management
+	if (UWorld* World = GetWorld())
 	{
-		SetSpawnPointActive(true);
+		if (AThreadTalesGameMode* GM = World->GetAuthGameMode<AThreadTalesGameMode>())
+		{
+			if (GM->GetActiveSpawnPoint() != this)
+			{
+				GM->SetActiveSpawnPoint(this);
+			}
+		}
+		else
+		{
+			// Fallback if custom GameMode is not active
+			if (!bIsActive)
+			{
+				SetSpawnPointActive(true);
+			}
+			if (AThreadTalesPlayerController* PC = Cast<AThreadTalesPlayerController>(Character->GetController()))
+			{
+				PC->SetCurrentSpawnPoint(this);
+			}
+		}
 	}
 
-	// Update PlayerController respawn point safely (individual controller for 2P Co-op)
-	if (AThreadTalesPlayerController* PC = Cast<AThreadTalesPlayerController>(Character->GetController()))
-	{
-		PC->SetCurrentSpawnPoint(this);
-	}
-
-	// Apply health regen effect if configured
-	if (HealthRegenEffectClass)
+	// Apply health regen effect ONLY if the bonfire is currently active
+	if (bIsActive && HealthRegenEffectClass)
 	{
 		if (UAbilitySystemComponent* ASC = Character->GetAbilitySystemComponent())
 		{
-			FGameplayEffectContextHandle Context = ASC->MakeEffectContext();
-			Context.AddSourceObject(this);
-			FGameplayEffectSpecHandle SpecHandle = ASC->MakeOutgoingSpec(HealthRegenEffectClass, 1.0f, Context);
-			if (SpecHandle.IsValid())
+			if (!ActiveRegenEffects.Contains(Character))
 			{
-				FActiveGameplayEffectHandle ActiveHandle = ASC->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data.Get());
-				ActiveRegenEffects.Add(Character, ActiveHandle);
+				FGameplayEffectContextHandle Context = ASC->MakeEffectContext();
+				Context.AddSourceObject(this);
+				FGameplayEffectSpecHandle SpecHandle = ASC->MakeOutgoingSpec(HealthRegenEffectClass, 1.0f, Context);
+				if (SpecHandle.IsValid())
+				{
+					FActiveGameplayEffectHandle ActiveHandle = ASC->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data.Get());
+					ActiveRegenEffects.Add(Character, ActiveHandle);
+				}
 			}
 		}
 	}

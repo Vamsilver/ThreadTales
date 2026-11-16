@@ -9,6 +9,8 @@
 
 class UButton;
 class UTextBlock;
+class UImage;
+class UTexture;
 class APlayerController;
 class AThreadTalesPlayerState;
 enum class EThreadTalesButtonAction : uint8;
@@ -99,6 +101,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "ThreadTales|LobbySlot")
 	void RefreshSlotState();
 
+	/** Sets or updates the render target / texture displayed in CharacterPreviewImage */
+	UFUNCTION(BlueprintCallable, Category = "ThreadTales|LobbySlot")
+	void SetPreviewTexture(UTexture* InTexture);
+
 	/** Returns the button or widget for Ready state */
 	UFUNCTION(BlueprintPure, Category = "ThreadTales|LobbySlot")
 	UWidget* GetReadyButtonWidget() const;
@@ -170,6 +176,10 @@ public:
 	/** Text block displaying ready status */
 	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional), Category = "ThreadTales|LobbySlot")
 	TObjectPtr<UTextBlock> Txt_Status;
+
+	/** Image displaying 3D character render target preview in slot window */
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional), Category = "ThreadTales|LobbySlot")
+	TObjectPtr<UImage> CharacterPreviewImage;
 
 	/** Active input device state for this slot */
 	UPROPERTY(BlueprintReadOnly, Category = "ThreadTales|LobbySlot")

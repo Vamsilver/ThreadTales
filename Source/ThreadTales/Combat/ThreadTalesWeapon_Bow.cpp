@@ -1,6 +1,8 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "Combat/ThreadTalesWeapon_Bow.h"
+#include "GameFramework/Character.h"
+
 #include "Combat/ThreadTalesBowTrajectoryComponent.h"
 #include "Data/ThreadTalesBowConfig.h"
 #include "Abilities/ThreadTalesGA_BowDraw.h"
@@ -22,6 +24,22 @@
 #include "Curves/CurveFloat.h"
 #include "Engine/SkeletalMeshSocket.h"
 #include "UObject/ConstructorHelpers.h"
+
+namespace
+{
+	USkeletalMeshComponent* ResolveOwnerSkeletalMesh(const AActor* OwnerActor)
+	{
+		if (const ACharacter* Character = Cast<ACharacter>(OwnerActor))
+		{
+			return Character->GetMesh();
+		}
+		if (OwnerActor)
+		{
+			return OwnerActor->FindComponentByClass<USkeletalMeshComponent>();
+		}
+		return nullptr;
+	}
+}
 
 AThreadTalesWeapon_Bow::AThreadTalesWeapon_Bow()
 {
@@ -162,19 +180,17 @@ void AThreadTalesWeapon_Bow::Equip(AActor* NewOwner)
 	if (!HasAuthority()) { return; }
 
 	SetOwner(NewOwner);
+	if (NewOwner) { if (BowSkeletalMesh) { BowSkeletalMesh->IgnoreActorWhenMoving(NewOwner, true); } }
 	if (GrantedAbilities.IsEmpty())
 	{
 		GrantedAbilities = { UThreadTalesGA_BowDraw::StaticClass(), UThreadTalesGA_BowRelease::StaticClass(), UThreadTalesGA_BowQuickCombo::StaticClass() };
 	}
 	if (!WeaponMappingContext) { WeaponMappingContext = LoadObject<UInputMappingContext>(nullptr, TEXT("/Game/Input/IMC/IMC_Katana.IMC_Katana")); }
 
-	if (ACharacter* Character = Cast<ACharacter>(NewOwner))
+	if (USkeletalMeshComponent* CharMesh = ResolveOwnerSkeletalMesh(NewOwner))
 	{
-		if (Character->GetMesh())
-		{
-			if (bStartDrawn) { AttachToHand(); }
-			else { AttachToSheath(); }
-		}
+		if (bStartDrawn) { AttachToHand(); }
+		else { AttachToSheath(); }
 	}
 
 	if (IAbilitySystemInterface* ASI = Cast<IAbilitySystemInterface>(NewOwner))
@@ -205,10 +221,9 @@ void AThreadTalesWeapon_Bow::Unequip()
 void AThreadTalesWeapon_Bow::AttachToHand()
 {
 	// validate socket if not null
-	ACharacter* Character = Cast<ACharacter>(GetOwner());
-	if (Character && Character->GetMesh() && BowSkeletalMesh)
+	USkeletalMeshComponent* CharMesh = ResolveOwnerSkeletalMesh(GetOwner());
+	if (CharMesh && BowSkeletalMesh)
 	{
-		USkeletalMeshComponent* CharMesh = Character->GetMesh();
 		const FName TargetHandSocket = CharMesh->DoesSocketExist(FName("overlay_bow")) ? FName("overlay_bow") : HandSocketName;
 		const FTransform RefPoseCompTransform(FRotator(0.0f, 0.0f, -90.0f), FVector::ZeroVector);
 
@@ -233,17 +248,16 @@ void AThreadTalesWeapon_Bow::AttachToHand()
 		SetActorTickEnabled(true);
 
 		UE_LOG(LogThreadTalesCombat, Display, TEXT("[Bow] Attached BowSkeletalMesh to hand socket '%s' on '%s'"),
-			*TargetHandSocket.ToString(), *Character->GetName());
+			*TargetHandSocket.ToString(), *GetNameSafe(GetOwner()));
 	}
 }
 
 void AThreadTalesWeapon_Bow::AttachToSheath()
 {
 	// validate socket if not null
-	ACharacter* Character = Cast<ACharacter>(GetOwner());
-	if (Character && Character->GetMesh() && BowSkeletalMesh)
+	USkeletalMeshComponent* CharMesh = ResolveOwnerSkeletalMesh(GetOwner());
+	if (CharMesh && BowSkeletalMesh)
 	{
-		USkeletalMeshComponent* CharMesh = Character->GetMesh();
 		const FName TargetSheathSocket = CharMesh->DoesSocketExist(FName("bow_holder1")) ? FName("bow_holder1") : SheathSocketName;
 		const FTransform RefPoseCompTransform(FRotator(0.0f, 0.0f, -90.0f), FVector::ZeroVector);
 
@@ -271,7 +285,7 @@ void AThreadTalesWeapon_Bow::AttachToSheath()
 		if (bAddContextOnlyWhenDrawn) { RemoveWeaponMappingContext(); }
 
 		UE_LOG(LogThreadTalesCombat, Display, TEXT("[Bow] Attached BowSkeletalMesh to sheath socket '%s' on '%s'"),
-			*TargetSheathSocket.ToString(), *Character->GetName());
+			*TargetSheathSocket.ToString(), *GetNameSafe(GetOwner()));
 	}
 }
 

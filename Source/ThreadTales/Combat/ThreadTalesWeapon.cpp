@@ -12,6 +12,23 @@
 #include "GameFramework/PlayerController.h"
 #include "Net/UnrealNetwork.h"
 #include "Engine/Engine.h"
+#include "Components/SkeletalMeshComponent.h"
+
+namespace
+{
+	USkeletalMeshComponent* ResolveOwnerSkeletalMesh(const AActor* OwnerActor)
+	{
+		if (const ACharacter* Character = Cast<ACharacter>(OwnerActor))
+		{
+			return Character->GetMesh();
+		}
+		if (OwnerActor)
+		{
+			return OwnerActor->FindComponentByClass<USkeletalMeshComponent>();
+		}
+		return nullptr;
+	}
+}
 
 AThreadTalesWeapon::AThreadTalesWeapon()
 {
@@ -125,9 +142,13 @@ void AThreadTalesWeapon::Equip(AActor* NewOwner)
 	if (!HasAuthority()) return;
 
 	SetOwner(NewOwner);
+	if (NewOwner)
+	{
+		if (WeaponMesh) { WeaponMesh->IgnoreActorWhenMoving(NewOwner, true); }
+	}
 
-	ACharacter* Character = Cast<ACharacter>(NewOwner);
-	if (Character && Character->GetMesh())
+	USkeletalMeshComponent* CharMesh = ResolveOwnerSkeletalMesh(NewOwner);
+	if (CharMesh)
 	{
 		// Attach Sheath (scabbard) only if weapon uses sheath and mesh is set
 		if (bHasSheath && SheathMesh && SheathMesh->GetStaticMesh())
@@ -215,23 +236,23 @@ void AThreadTalesWeapon::Unequip()
 
 void AThreadTalesWeapon::AttachToHand()
 {
-	ACharacter* Character = Cast<ACharacter>(GetOwner());
-	if (Character && Character->GetMesh() && WeaponMesh)
+	USkeletalMeshComponent* CharMesh = ResolveOwnerSkeletalMesh(GetOwner());
+	if (CharMesh && WeaponMesh)
 	{
 		FName TargetHandSocket = HandSocketName;
-		if (!Character->GetMesh()->DoesSocketExist(TargetHandSocket))
+		if (!CharMesh->DoesSocketExist(TargetHandSocket))
 		{
-			if (Character->GetMesh()->DoesSocketExist(FName("weapon_hand_r_socket")))
+			if (CharMesh->DoesSocketExist(FName("weapon_hand_r_socket")))
 			{
 				TargetHandSocket = FName("weapon_hand_r_socket");
 			}
-			else if (Character->GetMesh()->DoesSocketExist(FName("weapon_r")))
+			else if (CharMesh->DoesSocketExist(FName("weapon_r")))
 			{
 				TargetHandSocket = FName("weapon_r");
 			}
 		}
 
-		WeaponMesh->AttachToComponent(Character->GetMesh(), FAttachmentTransformRules::SnapToTargetNotIncludingScale, TargetHandSocket);
+		WeaponMesh->AttachToComponent(CharMesh, FAttachmentTransformRules::SnapToTargetNotIncludingScale, TargetHandSocket);
 		
 		// If we are currently executing the draw montage, maintain Drawing state
 		// so that UpdateBladeClipPlane() continues masking blade pixels inside the scabbard until draw completes.
@@ -243,23 +264,23 @@ void AThreadTalesWeapon::AttachToHand()
 		AddWeaponMappingContext();
 
 		UE_LOG(LogThreadTalesCombat, Display, TEXT("[Weapon] '%s' attached to hand socket '%s' on '%s' (State: %d)"),
-			*GetName(), *TargetHandSocket.ToString(), *Character->GetName(), static_cast<int32>(WeaponState));
+			*GetName(), *TargetHandSocket.ToString(), *GetNameSafe(GetOwner()), static_cast<int32>(WeaponState));
 	}
 }
 
 void AThreadTalesWeapon::AttachToSheath()
 {
-	ACharacter* Character = Cast<ACharacter>(GetOwner());
-	if (Character && Character->GetMesh() && WeaponMesh)
+	USkeletalMeshComponent* CharMesh = ResolveOwnerSkeletalMesh(GetOwner());
+	if (CharMesh && WeaponMesh)
 	{
 		FName TargetSheathSocket = SheathSocketName;
-		if (!Character->GetMesh()->DoesSocketExist(TargetSheathSocket))
+		if (!CharMesh->DoesSocketExist(TargetSheathSocket))
 		{
-			if (Character->GetMesh()->DoesSocketExist(FName("weapon_sheath_socket")))
+			if (CharMesh->DoesSocketExist(FName("weapon_sheath_socket")))
 			{
 				TargetSheathSocket = FName("weapon_sheath_socket");
 			}
-			else if (Character->GetMesh()->DoesSocketExist(FName("Katana_sheath")))
+			else if (CharMesh->DoesSocketExist(FName("Katana_sheath")))
 			{
 				TargetSheathSocket = FName("Katana_sheath");
 			}
@@ -280,9 +301,9 @@ void AThreadTalesWeapon::AttachToSheath()
 			UE_LOG(LogThreadTalesCombat, Display, TEXT("[Weapon] '%s' SHEATHED -> docked directly to SheathMesh with relative offset (%s)"),
 				*GetName(), *SheathRelativeTransform.GetLocation().ToString());
 		}
-		else if (bHasSheath && !TargetSheathSocket.IsNone() && Character->GetMesh()->DoesSocketExist(TargetSheathSocket))
+		else if (bHasSheath && !TargetSheathSocket.IsNone() && CharMesh->DoesSocketExist(TargetSheathSocket))
 		{
-			WeaponMesh->AttachToComponent(Character->GetMesh(), FAttachmentTransformRules::SnapToTargetNotIncludingScale, TargetSheathSocket);
+			WeaponMesh->AttachToComponent(CharMesh, FAttachmentTransformRules::SnapToTargetNotIncludingScale, TargetSheathSocket);
 			WeaponMesh->SetRelativeTransform(SheathRelativeTransform);
 			WeaponMesh->UpdateComponentToWorld();
 			SetWeaponState(EWeaponCombatState::Sheathed);
@@ -292,7 +313,7 @@ void AThreadTalesWeapon::AttachToSheath()
 			}
 
 			UE_LOG(LogThreadTalesCombat, Display, TEXT("[Weapon] '%s' SHEATHED -> attached to sheath socket '%s' on '%s' with relative offset (%s)"),
-				*GetName(), *TargetSheathSocket.ToString(), *Character->GetName(), *SheathRelativeTransform.GetLocation().ToString());
+				*GetName(), *TargetSheathSocket.ToString(), *GetNameSafe(GetOwner()), *SheathRelativeTransform.GetLocation().ToString());
 		}
 		else
 		{
@@ -305,23 +326,23 @@ void AThreadTalesWeapon::AttachToSheath()
 
 void AThreadTalesWeapon::AttachSheathToHand()
 {
-	ACharacter* Character = Cast<ACharacter>(GetOwner());
-	if (Character && Character->GetMesh() && bHasSheath && SheathMesh && SheathMesh->GetStaticMesh())
+	USkeletalMeshComponent* CharMesh = ResolveOwnerSkeletalMesh(GetOwner());
+	if (CharMesh && bHasSheath && SheathMesh && SheathMesh->GetStaticMesh())
 	{
 		FName TargetSheathHandSocket = SheathHandSocketName;
-		if (!Character->GetMesh()->DoesSocketExist(TargetSheathHandSocket))
+		if (!CharMesh->DoesSocketExist(TargetSheathHandSocket))
 		{
-			if (Character->GetMesh()->DoesSocketExist(FName("scabbard2")))
+			if (CharMesh->DoesSocketExist(FName("scabbard2")))
 			{
 				TargetSheathHandSocket = FName("scabbard2");
 			}
-			else if (Character->GetMesh()->DoesSocketExist(FName("hand_l")))
+			else if (CharMesh->DoesSocketExist(FName("hand_l")))
 			{
 				TargetSheathHandSocket = FName("hand_l");
 			}
 		}
 
-		SheathMesh->AttachToComponent(Character->GetMesh(), FAttachmentTransformRules::SnapToTargetNotIncludingScale, TargetSheathHandSocket);
+		SheathMesh->AttachToComponent(CharMesh, FAttachmentTransformRules::SnapToTargetNotIncludingScale, TargetSheathHandSocket);
 
 		// Re-affirm rigid blade docking inside scabbard if sheathed
 		if (WeaponMesh && (WeaponMesh->GetAttachParent() == SheathMesh || IsSheathed()))
@@ -332,37 +353,37 @@ void AThreadTalesWeapon::AttachSheathToHand()
 		}
 
 		UE_LOG(LogThreadTalesCombat, Display, TEXT("[Weapon] '%s' SHEATH -> attached to hand socket '%s' on '%s'"),
-			*GetName(), *TargetSheathHandSocket.ToString(), *Character->GetName());
+			*GetName(), *TargetSheathHandSocket.ToString(), *GetNameSafe(GetOwner()));
 	}
 }
 
 void AThreadTalesWeapon::AttachSheathToHip()
 {
-	ACharacter* Character = Cast<ACharacter>(GetOwner());
-	if (Character && Character->GetMesh() && bHasSheath && SheathMesh && SheathMesh->GetStaticMesh())
+	USkeletalMeshComponent* CharMesh = ResolveOwnerSkeletalMesh(GetOwner());
+	if (CharMesh && bHasSheath && SheathMesh && SheathMesh->GetStaticMesh())
 	{
 		FName TargetSheathSocket = SheathSocketName;
-		if (!Character->GetMesh()->DoesSocketExist(TargetSheathSocket))
+		if (!CharMesh->DoesSocketExist(TargetSheathSocket))
 		{
-			if (Character->GetMesh()->DoesSocketExist(FName("weapon_sheath_socket")))
+			if (CharMesh->DoesSocketExist(FName("weapon_sheath_socket")))
 			{
 				TargetSheathSocket = FName("weapon_sheath_socket");
 			}
-			else if (Character->GetMesh()->DoesSocketExist(FName("Katana_sheath")))
+			else if (CharMesh->DoesSocketExist(FName("Katana_sheath")))
 			{
 				TargetSheathSocket = FName("Katana_sheath");
 			}
-			else if (Character->GetMesh()->DoesSocketExist(FName("pelvis")))
+			else if (CharMesh->DoesSocketExist(FName("pelvis")))
 			{
 				TargetSheathSocket = FName("pelvis");
 			}
-			else if (Character->GetMesh()->DoesSocketExist(FName("spine_01")))
+			else if (CharMesh->DoesSocketExist(FName("spine_01")))
 			{
 				TargetSheathSocket = FName("spine_01");
 			}
 		}
 
-		SheathMesh->AttachToComponent(Character->GetMesh(), FAttachmentTransformRules::SnapToTargetNotIncludingScale, TargetSheathSocket);
+		SheathMesh->AttachToComponent(CharMesh, FAttachmentTransformRules::SnapToTargetNotIncludingScale, TargetSheathSocket);
 
 		// Re-affirm rigid blade docking inside scabbard if sheathed
 		if (WeaponMesh && (WeaponMesh->GetAttachParent() == SheathMesh || IsSheathed()))
@@ -373,7 +394,7 @@ void AThreadTalesWeapon::AttachSheathToHip()
 		}
 
 		UE_LOG(LogThreadTalesCombat, Display, TEXT("[Weapon] '%s' SHEATH -> attached to hip socket '%s' on '%s'"),
-			*GetName(), *TargetSheathSocket.ToString(), *Character->GetName());
+			*GetName(), *TargetSheathSocket.ToString(), *GetNameSafe(GetOwner()));
 	}
 }
 
